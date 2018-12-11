@@ -45,13 +45,13 @@ def __main__(unused_argv):
         nb_actions = env._SCREEN * env._SCREEN + 1
 
         print(nb_actions)
-
+        # TODO: Permute and remove channels_first
         model = Sequential()
         model.add(Convolution2D(32, 4, input_shape=(1, env._SCREEN, env._SCREEN), data_format='channels_first'))
         model.add(Activation('relu'))
-        model.add(Convolution2D(32, 4, data_format='channels_first'))
+        model.add(Convolution2D(32, 4, data_format='channels_last'))
         model.add(Activation('relu'))
-        model.add(Convolution2D(32, 4, data_format='channels_first'))
+        model.add(Convolution2D(32, 4, data_format='channels_last'))
         model.add(Activation('relu'))
         model.add(Flatten())
         model.add(Dense(512))
@@ -65,7 +65,7 @@ def __main__(unused_argv):
         memory = SequentialMemory(limit=1000000, window_length=1)
         # policy = BoltzmannQPolicy()
         policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                                      nb_steps=1000000)
+                                      nb_steps=300000)
         # policy = Sc2Policy(env)
         # processor = Sc2Processor()
 
@@ -80,7 +80,7 @@ def __main__(unused_argv):
         log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
 
         if _TEST:
-            dqn.load_weights('dqn_MoveToBeacon_weights_3000000.h5f')
+            dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_2310000_16dim_20step.h5f')
             dqn.test(env, nb_episodes=10, visualize=False)
         else:
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=30000)]
