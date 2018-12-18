@@ -11,10 +11,10 @@ from pysc2.lib import features
 from pysc2.agents.scripted_agent import MoveToBeacon
 from pysc2.agents.random_agent import RandomAgent
 
-from keras.models import Sequential
-from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
+from keras.models import Sequential, Model
+from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D
+
 from keras.optimizers import Adam
-import keras.backend as K
 
 from rl.agents.dqn import DQNAgent
 from rl.policy import LinearAnnealedPolicy, BoltzmannQPolicy, EpsGreedyQPolicy
@@ -30,9 +30,79 @@ _EPISODES = 1000
 
 _TEST = True
 
-def __main__(unused_argv):
-    episodes = 0
 
+def __main__(unused_argv):
+
+    try:
+        # env = Sc2Env()
+        # env.seed(1234)
+        # numpy.random.seed(123)
+
+        #    0/no_op                                              ()
+        #    7/select_army                                        (7/select_add [2])
+        #  331/Move_screen                                        (3/queued [2]; 0/screen [84, 84])
+
+        nb_actions = 2
+
+        # print(nb_actions)
+
+        main_input = Input(shape=(32, 32, 1), name='main_input')
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(main_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        coord_out = Conv2D(1, (1, 1), padding='same', activation='relu')(branch)
+
+        # act_out = Flatten(branch)
+        act_out = Dense(256, activation='relu')(branch)
+        act_out = Flatten()(act_out)
+        act_out = Dense(nb_actions, activation='linear')(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        print(act_out.shape)
+        print(coord_out.shape)
+
+        print(full_conv_sc2.summary())
+
+        exit(0)
+
+        memory = SequentialMemory(limit=1000000, window_length=1)
+        # policy = BoltzmannQPolicy()
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                                      nb_steps=1000000)
+        # policy = Sc2Policy(env)
+        # processor = Sc2Processor()
+
+        dqn = DQNAgent(model=model, nb_actions=nb_actions, enable_dueling_network=True, memory=memory,
+                       nb_steps_warmup=1000, enable_double_dqn=True,
+                       policy=policy, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
+
+        dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+
+        weights_filename = 'dqn_{}_weights.h5f'.format(_ENV_NAME)
+        checkpoint_weights_filename = 'dqn_' + _ENV_NAME + '_weights_{step}.h5f'
+        log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
+
+        if _TEST:
+            dqn.load_weights('dqn_MoveToBeacon_weights_3000000.h5f')
+            dqn.test(env, nb_episodes=10, visualize=False)
+        else:
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=30000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        pass
+
+
+def naive_sequential_q_agent():
     try:
         env = Sc2Env()
         env.seed(1234)
@@ -96,7 +166,6 @@ def __main__(unused_argv):
     except Exception as e:
         print(e)
         pass
-
 
 def simple_scripted_agent():
     episodes = 0
