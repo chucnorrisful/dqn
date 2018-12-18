@@ -12,8 +12,8 @@ class Sc2Env(Env):
     last_obs = None
 
     _ENV_NAME = "MoveToBeacon"
-    _SCREEN = 32
-    _MINIMAP = 32
+    _SCREEN = 16
+    _MINIMAP = 16
     _VISUALIZE = False
 
     def __init__(self):
@@ -28,7 +28,7 @@ class Sc2Env(Env):
                 ),
                 use_feature_units=True
             ),
-            step_mul=8,
+            step_mul=20,
             game_steps_per_episode=0,
             visualize=self._VISUALIZE
         )
