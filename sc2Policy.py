@@ -1,8 +1,6 @@
 from rl.policy import Policy
 import numpy as np
-from pysc2.lib import actions
-
-FUNCTIONS = actions.FUNCTIONS
+from SC2DqnAgent import Sc2Action
 
 
 class Sc2Policy(Policy):
@@ -23,44 +21,26 @@ class Sc2Policy(Policy):
             Selection action
         """
         assert self.sc2_env
-        assert q_values.ndim == 1
+        # assert q_values.ndim == 1
         nb_actions = 3
         nb_pixels = self.sc2_env._SCREEN
 
-        action = 0
-        x_coord = 0
-        y_coord = 0
+        action = Sc2Action()
 
         if np.random.uniform() < self.eps and not self.testing:
-            action = np.random.random_integers(0, nb_actions-1)
-            if action == 2:
-                x_coord = np.random.random_integers(0, nb_pixels-1)
-                y_coord = np.random.random_integers(0, nb_pixels-1)
+
+            action.action = np.random.random_integers(0, nb_actions-1)
+            action.coords = (np.random.random_integers(0, nb_pixels-1),  np.random.random_integers(0, nb_pixels-1))
 
             # print("Rand sel Action ", action, "args ", arguments)
         else:
-            action = np.argmax(q_values[0:2])
-            if action == 2:
-                x_coord = np.argmax(q_values[4:4+nb_pixels])
-                y_coord = np.argmax(q_values[4+nb_pixels:])
-                print(x_coord, y_coord, q_values[4:4 + nb_pixels], q_values[4 + nb_pixels:])
+            action.action = np.argmax(q_values[0])
 
-        # print(np.argmax(q_values[4:4+nb_pixels]), np.random.random_integers(0, nb_pixels-1))
+            action.coords = np.unravel_index(q_values[1].argmax(), q_values[1].shape)
 
-        real_action = FUNCTIONS.no_op()
+            print(action)
 
-        if action == 0:
-            if 0 in self.sc2_env.last_obs.observation.available_actions:
-                real_action = FUNCTIONS.no_op()
-        elif action == 1:
-            if 7 in self.sc2_env.last_obs.observation.available_actions:
-                real_action = FUNCTIONS.select_army("select")
-        elif action == 2:
-            if 331 in self.sc2_env.last_obs.observation.available_actions:
-                real_action = FUNCTIONS.Move_screen("now", (x_coord, y_coord))
-
-        return real_action
-
+        return action
 
     def get_config(self):
         """Return configurations of EpsGreedyPolicy
