@@ -25,8 +25,81 @@ class Sc2Action:
         action = act
 
 
+class AbstractSc2DQNAgent(Agent):
+    """Write me
+    """
+    def __init__(self, nb_actions, screen_size, memory, gamma=.99, batch_size=32, nb_steps_warmup=1000,
+                 train_interval=1, memory_interval=1, target_model_update=10000,
+                 delta_range=None, delta_clip=np.inf, custom_model_objects={}, **kwargs):
+        super(AbstractSc2DQNAgent, self).__init__(**kwargs)
+
+        # Soft vs hard target model updates.
+        if target_model_update < 0:
+            raise ValueError('`target_model_update` must be >= 0.')
+        elif target_model_update >= 1:
+            # Hard update every `target_model_update` steps.
+            target_model_update = int(target_model_update)
+        else:
+            # Soft update with `(1 - target_model_update) * old + target_model_update * new`.
+            target_model_update = float(target_model_update)
+
+        if delta_range is not None:
+            warnings.warn('`delta_range` is deprecated. Please use `delta_clip` instead, which takes a single scalar. For now we\'re falling back to `delta_range[1] = {}`'.format(delta_range[1]))
+            delta_clip = delta_range[1]
+
+        # Parameters.
+        self.nb_actions = nb_actions
+        self.screen_size = screen_size
+        self.gamma = gamma
+        self.batch_size = batch_size
+        self.nb_steps_warmup = nb_steps_warmup
+        self.train_interval = train_interval
+        self.memory_interval = memory_interval
+        self.target_model_update = target_model_update
+        self.delta_clip = delta_clip
+        self.custom_model_objects = custom_model_objects
+
+        # Related objects.
+        self.memory = memory
+
+        # State.
+        self.compiled = False
+
+    def process_state_batch(self, batch):
+        batch = np.array(batch)
+        if self.processor is None:
+            return batch
+        return self.processor.process_state_batch(batch)
+
+    def compute_batch_q_values(self, state_batch):
+        batch = self.process_state_batch(state_batch)
+        q_values = self.model.predict_on_batch(batch)
+        # assert q_values.shape == (len(state_batch), self.nb_actions) (len(state_batch), 2)
+        return q_values
+
+    # TODO: .flatten() crashes; find out what c_q_v() does and where its used
+    def compute_q_values(self, state):
+        q_values = self.compute_batch_q_values([state]).flatten()
+        # assert q_values.shape == (2, 1) ?
+        return q_values
+
+    def get_config(self):
+        return {
+            'nb_actions': self.nb_actions,
+            'screen_size': self.screen_size,
+            'gamma': self.gamma,
+            'batch_size': self.batch_size,
+            'nb_steps_warmup': self.nb_steps_warmup,
+            'train_interval': self.train_interval,
+            'memory_interval': self.memory_interval,
+            'target_model_update': self.target_model_update,
+            'delta_clip': self.delta_clip,
+            'memory': get_object_config(self.memory),
+        }
+
+
 # A modified version of the Keras-rl DQN Agent to handle a much larger actionspace (multiple outputs required)
-class SC2DQNAgent(AbstractDQNAgent):
+class SC2DQNAgent(AbstractSc2DQNAgent):
     """
     # Arguments
         model__: A Keras model.
@@ -115,6 +188,7 @@ class SC2DQNAgent(AbstractDQNAgent):
             config['target_model'] = get_object_config(self.target_model)
         return config
 
+    # modded
     def compile(self, optimizer, metrics=[]):
         metrics += [mean_q]  # register default metrics
 
@@ -130,28 +204,48 @@ class SC2DQNAgent(AbstractDQNAgent):
             optimizer = AdditionalUpdatesOptimizer(optimizer, updates)
 
         def clipped_masked_error(args):
-            y_true, y_pred, mask = args
-            loss = huber_loss(y_true, y_pred, self.delta_clip)
-            loss *= mask  # apply element-wise mask
-            return K.sum(loss, axis=-1)
+            y_true_a, y_true_b, y_pred_a, y_pred_b, mask_a, mask_b = args
+            loss = [huber_loss(y_true_a, y_pred_a, self.delta_clip),
+                    huber_loss(y_true_b, y_pred_b, self.delta_clip)]
+            loss[0] *= mask_a  # apply element-wise mask
+            loss[1] *= mask_b  # apply element-wise mask
+            sum_loss_a = K.sum(loss[0])
+            sum_loss_b = K.sum(loss[1])
+            return K.sum([sum_loss_a, sum_loss_b], axis=-1)
 
         # Create trainable model. The problem is that we need to mask the output since we only
         # ever want to update the Q values for a certain action. The way we achieve this is by
         # using a custom Lambda layer that computes the loss. This gives us the necessary flexibility
         # to mask out certain parameters by passing in multiple inputs to the Lambda layer.
+
         y_pred = self.model.output
-        y_true = Input(name='y_true', shape=(self.nb_actions,))
-        mask = Input(name='mask', shape=(self.nb_actions,))
-        loss_out = Lambda(clipped_masked_error, output_shape=(1,), name='loss')([y_true, y_pred, mask])
+        print("lol")
+        y_true_a = Input(name='y_true_a', shape=(self.nb_actions, 1))
+        y_true_b = Input(name='y_true_b', shape=(self.screen_size, self.screen_size, 1))
+        mask_a = Input(name='mask_a', shape=(self.nb_actions, 1))
+        mask_b = Input(name='mask_b', shape=(self.screen_size, self.screen_size, 1))
+
+        # Layer loss was called with an input that isn't a symbolic tensor. Received type: <class 'list'>.
+        # Full input:
+        # [<tf.Tensor 'y_true_a:0' shape=(?, 2, 1) dtype=float32>,
+        # <tf.Tensor 'y_true_b:0' shape=(?, 16, 16, 1) dtype=float32>,
+        # [<tf.Tensor 'dense_2/BiasAdd:0' shape=(?, 2) dtype=float32>,
+        # <tf.Tensor 'conv2d_3/Relu:0' shape=(?, 16, 16, 1) dtype=float32>],
+        # <tf.Tensor 'mask:0' shape=(?, 2, 1) dtype=float32>,
+        # <tf.Tensor 'mask_1:0' shape=(?, 16, 16, 1) dtype=float32>].
+        # All inputs to the layer should be tensors.
+        loss_out = Lambda(clipped_masked_error, output_shape=(1,), name='loss')([y_true_a, y_true_b, y_pred[0], y_pred[1], mask_a, mask_b])
         ins = [self.model.input] if type(self.model.input) is not list else self.model.input
-        trainable_model = Model(inputs=ins + [y_true, mask], outputs=[loss_out, y_pred])
-        assert len(trainable_model.output_names) == 2
-        combined_metrics = {trainable_model.output_names[1]: metrics}
+
+        trainable_model = Model(inputs=ins + [y_true_a, y_true_b, mask_a, mask_b], outputs=[loss_out, y_pred[0], y_pred[1]])
+        # assert len(trainable_model.output_names) == 2 what is this??
+        # combined_metrics = {trainable_model.output_names[1]: metrics} i dunno ??
         losses = [
             lambda y_true, y_pred: y_pred,  # loss is computed in Lambda layer
             lambda y_true, y_pred: K.zeros_like(y_pred),  # we only include this for the metrics
+            lambda y_true, y_pred: K.zeros_like(y_pred),  # we only include this for the metrics
         ]
-        trainable_model.compile(optimizer=optimizer, loss=losses, metrics=combined_metrics)
+        trainable_model.compile(optimizer=optimizer, loss=losses)  # metrics=combined_metrics
         self.trainable_model = trainable_model
 
         self.compiled = True
@@ -173,6 +267,7 @@ class SC2DQNAgent(AbstractDQNAgent):
     def update_target_model_hard(self):
         self.target_model.set_weights(self.model.get_weights())
 
+    # modded
     def forward(self, observation):
         # Select an action.
         state = self.memory.get_recent_state(observation)
@@ -243,37 +338,56 @@ class SC2DQNAgent(AbstractDQNAgent):
                 assert target_q_values.shape == (self.batch_size, self.nb_actions)
                 q_batch = target_q_values[range(self.batch_size), actions]
             else:
+
                 # Compute the q_values given state1, and extract the maximum for each sample in the batch.
                 # We perform this prediction on the target_model instead of the model for reasons
                 # outlined in Mnih (2015). In short: it makes the algorithm more stable.
                 target_q_values = self.target_model.predict_on_batch(state1_batch)
-                assert target_q_values.shape == (self.batch_size, self.nb_actions)
-                q_batch = np.max(target_q_values, axis=1).flatten()
-            assert q_batch.shape == (self.batch_size,)
+                target_q1_values = self.target_model.predict_on_batch(state1_batch)
+                # assert target_q_values.shape == (self.batch_size, self.nb_actions)
+                q_batch = []
+                for tar in target_q1_values:
+                    q_batch.append((np.max(tar[0]), np.max(tar[1])))
 
-            targets = np.zeros((self.batch_size, self.nb_actions))
-            dummy_targets = np.zeros((self.batch_size,))
-            masks = np.zeros((self.batch_size, self.nb_actions))
+            # perhaps.........
+            assert q_batch.shape == (self.batch_size, 2,)
+
+            targets_a = np.zeros((self.batch_size, self.nb_actions))
+            targets_b = np.zeros((self.batch_size, self.screen_size, self.screen_size))
+
+            dummy_targets_a = np.zeros((self.batch_size,))
+            dummy_targets_b = np.zeros((self.batch_size,))
+
+            masks_a = np.zeros((self.batch_size, self.nb_actions))
+            masks_b = np.zeros((self.batch_size, self.screen_size, self.screen_size))
 
             # Compute r_t + gamma * max_a Q(s_t+1, a) and update the target targets accordingly,
             # but only for the affected output units (as given by action_batch).
             discounted_reward_batch = self.gamma * q_batch
             # Set discounted reward to zero for all states that were terminal.
-            discounted_reward_batch *= terminal1_batch
-            assert discounted_reward_batch.shape == reward_batch.shape
-            Rs = reward_batch + discounted_reward_batch
-            for idx, (target, mask, R, action) in enumerate(zip(targets, masks, Rs, action_batch)):
-                target[action] = R  # update action with estimated accumulated reward
-                dummy_targets[idx] = R
-                mask[action] = 1.  # enable loss for this specific action
-            targets = np.array(targets).astype('float32')
-            masks = np.array(masks).astype('float32')
+            discounted_reward_batch *= terminal1_batch[:, np.newaxis]
+            # TODO: try np.einsum('ij,i->ij',A,b)
+            # assert discounted_reward_batch.shape == reward_batch.shape nope
+            Rs = reward_batch[:, None] + discounted_reward_batch
+            for idx, (target, mask_a, mask_b, R, action) in enumerate(zip(target_q_values, masks_a, masks_b, Rs, action_batch)):
+                target[0, action.action] = R[0]  # update action with estimated accumulated reward
+                target[1, action.coords] = R[1]  # update action with estimated accumulated reward
+                dummy_targets_a[idx] = R[0]
+                dummy_targets_b[idx] = R[1]
+                mask_a[action.action] = 1.  # enable loss for this specific action
+                mask_b[action.coords] = 1.  # enable loss for this specific action
+            targets_a = np.array(targets_a).astype('float32')
+            targets_b = np.array(targets_b).astype('float32')
+            masks_a = np.array(masks_a).astype('float32')
+            masks_b = np.array(masks_b).astype('float32')
 
+            # TODO: BAUSTELLE
             # Finally, perform a single update on the entire batch. We use a dummy target since
             # the actual loss is computed in a Lambda layer that needs more complex input. However,
             # it is still useful to know the actual target to compute metrics properly.
             ins = [state0_batch] if type(self.model.input) is not list else state0_batch
-            metrics = self.trainable_model.train_on_batch(ins + [targets, masks], [dummy_targets, targets])
+            metrics = self.trainable_model.train_on_batch(ins + [targets_a, targets_b, masks_a, masks_b],
+                                                          [(dummy_targets_a, dummy_targets_b), (targets_a, targets_b)])
             metrics = [metric for idx, metric in enumerate(metrics) if
                        idx not in (1, 2)]  # throw away individual losses
             metrics += self.policy.metrics
@@ -292,7 +406,7 @@ class SC2DQNAgent(AbstractDQNAgent):
     @property
     def metrics_names(self):
         # Throw away individual losses and replace output name since this is hidden from the user.
-        assert len(self.trainable_model.output_names) == 2
+        assert len(self.trainable_model.output_names) == 3
         dummy_output_name = self.trainable_model.output_names[1]
         model_metrics = [name for idx, name in enumerate(self.trainable_model.metrics_names) if idx not in (1, 2)]
         model_metrics = [name.replace(dummy_output_name + '_', '') for name in model_metrics]

@@ -1,6 +1,6 @@
 from absl import app
 from env import Sc2Env
-from SC2DqnAgent import DqnAgent
+from SC2DqnAgent import SC2DQNAgent
 from sc2Processor import Sc2Processor
 from sc2Policy import Sc2Policy
 import numpy
@@ -28,7 +28,7 @@ _MINIMAP = 24
 _VISUALIZE = False
 _EPISODES = 1000
 
-_TEST = True
+_TEST = False
 
 
 def __main__(unused_argv):
@@ -46,8 +46,9 @@ def __main__(unused_argv):
 
         # print(nb_actions)
 
-        main_input = Input(shape=(env._SCREEN, _SCREEN, 1), name='main_input')
-        x = Conv2D(16, (5, 5), padding='same', activation='relu')(main_input)
+        main_input = Input(shape=(1, env._SCREEN, env._SCREEN), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
         branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
 
         coord_out = Conv2D(1, (1, 1), padding='same', activation='relu')(branch)
@@ -61,15 +62,16 @@ def __main__(unused_argv):
 
         print(act_out.shape)
         print(coord_out.shape)
+        print(full_conv_sc2.summary())
 
         memory = SequentialMemory(limit=1000000, window_length=1)
         # policy = BoltzmannQPolicy()
-        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=.1, value_test=.05,
                                       nb_steps=1000000)
         # policy = Sc2Policy(env)
         # processor = Sc2Processor()
 
-        dqn = DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, enable_dueling_network=False, memory=memory,
+        dqn = SC2DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN, enable_dueling_network=False, memory=memory,
                        nb_steps_warmup=1000, enable_double_dqn=True,
                        policy=policy, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
 
@@ -165,8 +167,7 @@ def naive_sequential_q_agent():
 
 def simple_scripted_agent():
     episodes = 0
-    # agent = MoveToBeacon()
-    agent = DqnAgent()
+    agent = MoveToBeacon()
     # agent = RandomAgent()
 
     try:

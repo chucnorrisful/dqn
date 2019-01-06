@@ -37,15 +37,10 @@ class Sc2Env(Env):
 
         real_action = FUNCTIONS.no_op()
 
-        if act >= 1:
+        if act.action >= 1:
             if 331 in self.last_obs.observation.available_actions:
 
-                trans_act = act - 1
-
-                x_coord = int(trans_act / self._SCREEN)
-                y_coord = int(trans_act % self._SCREEN)
-
-                real_action = FUNCTIONS.Move_screen("now", (x_coord, y_coord))
+                real_action = FUNCTIONS.Move_screen("now", (act.coords[0], act.coords[1]))
 
         return real_action
 
