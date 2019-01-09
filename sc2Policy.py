@@ -22,7 +22,7 @@ class Sc2Policy(Policy):
         """
         assert self.sc2_env
         # assert q_values.ndim == 1
-        nb_actions = 3
+        nb_actions = 2
         nb_pixels = self.sc2_env._SCREEN
 
         action = Sc2Action()
@@ -36,9 +36,12 @@ class Sc2Policy(Policy):
         else:
             action.action = np.argmax(q_values[0])
 
-            action.coords = np.unravel_index(q_values[1].argmax(), q_values[1].shape)
+            action.coords = np.unravel_index(q_values[1].argmax(), q_values[1].shape)[1:3]
 
-            print(action)
+            # action.coords = np.unravel_index(np.reshape(q_values[1][0][:][:], (16, 16)).argmax(), np.reshape(
+            # q_values[1][0][:][:], (16, 16)).shape)
+
+        assert len(action.coords) == 2
 
         return action
 

@@ -9,9 +9,11 @@ from rl.core import Agent
 from rl.policy import EpsGreedyQPolicy, GreedyQPolicy
 from rl.util import *
 
-
+# modded, check
 def mean_q(y_true, y_pred):
-    return K.mean(K.max(y_pred, axis=-1))
+    mean_a = K.mean(K.max(y_pred[0], axis=-1))
+    mean_b = K.mean(K.max(y_pred[1], axis=(1, 2)))
+    return K.mean(mean_a, mean_b)
 
 
 class Sc2Action:
@@ -79,7 +81,8 @@ class AbstractSc2DQNAgent(Agent):
 
     # TODO: .flatten() crashes; find out what c_q_v() does and where its used
     def compute_q_values(self, state):
-        q_values = self.compute_batch_q_values([state]).flatten()
+        q_values = self.compute_batch_q_values([state])
+        # q_values = self.compute_batch_q_values([state]).flatten()
         # assert q_values.shape == (2, 1) ?
         return q_values
 
@@ -137,6 +140,7 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
 
         # TODO: fix dueling
         if self.enable_dueling_network:
+
             # get the second last layer of the model, abandon the last layer
             layer = model.layers[-2]
             nb_action = model.output._keras_shape[-1]
@@ -220,9 +224,9 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
 
         y_pred = self.model.output
         print("lol")
-        y_true_a = Input(name='y_true_a', shape=(self.nb_actions, 1))
+        y_true_a = Input(name='y_true_a', shape=(self.nb_actions,))
         y_true_b = Input(name='y_true_b', shape=(self.screen_size, self.screen_size, 1))
-        mask_a = Input(name='mask_a', shape=(self.nb_actions, 1))
+        mask_a = Input(name='mask_a', shape=(self.nb_actions,))
         mask_b = Input(name='mask_b', shape=(self.screen_size, self.screen_size, 1))
 
         # Layer loss was called with an input that isn't a symbolic tensor. Received type: <class 'list'>.
@@ -238,6 +242,7 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
         ins = [self.model.input] if type(self.model.input) is not list else self.model.input
 
         trainable_model = Model(inputs=ins + [y_true_a, y_true_b, mask_a, mask_b], outputs=[loss_out, y_pred[0], y_pred[1]])
+        print(trainable_model.summary())
         # assert len(trainable_model.output_names) == 2 what is this??
         # combined_metrics = {trainable_model.output_names[1]: metrics} i dunno ??
         losses = [
@@ -342,38 +347,45 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
                 # Compute the q_values given state1, and extract the maximum for each sample in the batch.
                 # We perform this prediction on the target_model instead of the model for reasons
                 # outlined in Mnih (2015). In short: it makes the algorithm more stable.
-                target_q_values = self.target_model.predict_on_batch(state1_batch)
+                # target_q_values = self.target_model.predict_on_batch(state1_batch)
+
                 target_q1_values = self.target_model.predict_on_batch(state1_batch)
-                # assert target_q_values.shape == (self.batch_size, self.nb_actions)
-                q_batch = []
-                for tar in target_q1_values:
-                    q_batch.append((np.max(tar[0]), np.max(tar[1])))
 
-            # perhaps.........
-            assert q_batch.shape == (self.batch_size, 2,)
+                q_batch_a = np.max(target_q1_values[0], axis=-1)
+                q_batch_b = np.max(target_q1_values[1], axis=(1, 2))[:, 0]
 
-            targets_a = np.zeros((self.batch_size, self.nb_actions))
-            targets_b = np.zeros((self.batch_size, self.screen_size, self.screen_size))
+                q_batch_a = np.array(q_batch_a)
+                q_batch_b = np.array(q_batch_b)
+
+            targets_a = np.zeros((self.batch_size, self.nb_actions,))
+            targets_b = np.zeros((self.batch_size, self.screen_size, self.screen_size, 1))
 
             dummy_targets_a = np.zeros((self.batch_size,))
             dummy_targets_b = np.zeros((self.batch_size,))
 
-            masks_a = np.zeros((self.batch_size, self.nb_actions))
-            masks_b = np.zeros((self.batch_size, self.screen_size, self.screen_size))
+            masks_a = np.zeros((self.batch_size, self.nb_actions,))
+            masks_b = np.zeros((self.batch_size, self.screen_size, self.screen_size, 1))
 
             # Compute r_t + gamma * max_a Q(s_t+1, a) and update the target targets accordingly,
             # but only for the affected output units (as given by action_batch).
-            discounted_reward_batch = self.gamma * q_batch
+            discounted_reward_batch_a = self.gamma * q_batch_a
+            discounted_reward_batch_b = self.gamma * q_batch_b
+
             # Set discounted reward to zero for all states that were terminal.
-            discounted_reward_batch *= terminal1_batch[:, np.newaxis]
+            discounted_reward_batch_a = discounted_reward_batch_a * terminal1_batch[:]
+            discounted_reward_batch_b = discounted_reward_batch_b * terminal1_batch[:]
             # TODO: try np.einsum('ij,i->ij',A,b)
             # assert discounted_reward_batch.shape == reward_batch.shape nope
-            Rs = reward_batch[:, None] + discounted_reward_batch
-            for idx, (target, mask_a, mask_b, R, action) in enumerate(zip(target_q_values, masks_a, masks_b, Rs, action_batch)):
-                target[0, action.action] = R[0]  # update action with estimated accumulated reward
-                target[1, action.coords] = R[1]  # update action with estimated accumulated reward
-                dummy_targets_a[idx] = R[0]
-                dummy_targets_b[idx] = R[1]
+            Rs_a = reward_batch[:] + discounted_reward_batch_a
+            Rs_b = reward_batch[:] + discounted_reward_batch_b
+            for idx, (target_a, target_b, mask_a, mask_b, R_a, R_b, action) in \
+                    enumerate(zip(targets_a, targets_b, masks_a, masks_b, Rs_a, Rs_b, action_batch)):
+                target_a[action.action] = R_a  # update action with estimated accumulated reward
+                if len(action.coords) != 2:
+                    print(action.coords)
+                target_b[action.coords] = R_b  # update action with estimated accumulated reward
+                dummy_targets_a[idx] = R_a
+                dummy_targets_b[idx] = R_b
                 mask_a[action.action] = 1.  # enable loss for this specific action
                 mask_b[action.coords] = 1.  # enable loss for this specific action
             targets_a = np.array(targets_a).astype('float32')
@@ -381,13 +393,12 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
             masks_a = np.array(masks_a).astype('float32')
             masks_b = np.array(masks_b).astype('float32')
 
-            # TODO: BAUSTELLE
             # Finally, perform a single update on the entire batch. We use a dummy target since
             # the actual loss is computed in a Lambda layer that needs more complex input. However,
             # it is still useful to know the actual target to compute metrics properly.
             ins = [state0_batch] if type(self.model.input) is not list else state0_batch
             metrics = self.trainable_model.train_on_batch(ins + [targets_a, targets_b, masks_a, masks_b],
-                                                          [(dummy_targets_a, dummy_targets_b), (targets_a, targets_b)])
+                                                          [np.zeros(self.batch_size), targets_a, targets_b])
             metrics = [metric for idx, metric in enumerate(metrics) if
                        idx not in (1, 2)]  # throw away individual losses
             metrics += self.policy.metrics

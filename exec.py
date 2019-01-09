@@ -4,6 +4,7 @@ from SC2DqnAgent import SC2DQNAgent
 from sc2Processor import Sc2Processor
 from sc2Policy import Sc2Policy
 import numpy
+import traceback
 
 from pysc2.env import sc2_env
 from pysc2.lib import features
@@ -35,8 +36,8 @@ def __main__(unused_argv):
 
     try:
         env = Sc2Env()
-        env.seed(1234)
-        numpy.random.seed(123)
+        env.seed(666)
+        numpy.random.seed(666)
 
         #    0/no_op                                              ()
         #    7/select_army                                        (7/select_add [2])
@@ -67,13 +68,13 @@ def __main__(unused_argv):
         memory = SequentialMemory(limit=1000000, window_length=1)
         # policy = BoltzmannQPolicy()
         policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                                      nb_steps=1000000)
+                                      nb_steps=20000)
         # policy = Sc2Policy(env)
         # processor = Sc2Processor()
 
         dqn = SC2DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN, enable_dueling_network=False, memory=memory,
-                       nb_steps_warmup=1000, enable_double_dqn=True,
-                       policy=policy, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
+                       nb_steps_warmup=1000, enable_double_dqn=False,
+                       policy=policy, gamma=.99, target_model_update=10000, train_interval=2, delta_clip=1.)
 
         dqn.compile(Adam(lr=0.00025), metrics=['mae'])
 
@@ -97,6 +98,7 @@ def __main__(unused_argv):
 
     except Exception as e:
         print(e)
+        traceback.print_exc()
         pass
 
 
@@ -163,6 +165,7 @@ def naive_sequential_q_agent():
 
     except Exception as e:
         print(e)
+        traceback.print_exc()
         pass
 
 def simple_scripted_agent():
