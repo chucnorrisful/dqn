@@ -15,7 +15,7 @@ class Sc2Env(Env):
     _ENV_NAME = "MoveToBeacon"
     _SCREEN = 16
     _MINIMAP = 16
-    _VISUALIZE = False
+    _VISUALIZE = True
 
     def __init__(self):
         print("init SC2")
