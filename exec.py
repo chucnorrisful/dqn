@@ -1,5 +1,5 @@
 from absl import app
-from env import Sc2Env
+from env import Sc2Env1Output, Sc2Env2Outputs
 from SC2DqnAgent import SC2DQNAgent
 from sc2Processor import Sc2Processor
 from sc2Policy import Sc2Policy
@@ -12,8 +12,10 @@ from pysc2.lib import features
 from pysc2.agents.scripted_agent import MoveToBeacon
 from pysc2.agents.random_agent import RandomAgent
 
+import keras.layers
+
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D
+from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D, MaxPooling2D
 
 from keras.optimizers import Adam
 
@@ -29,13 +31,17 @@ _MINIMAP = 16
 _VISUALIZE = False
 _EPISODES = 1000
 
-_TEST = True
+_TEST = False
 
 
 def __main__(unused_argv):
 
+    naive_sequential_q_agent_2()
+
+
+def fully_conf_q_agent():
     try:
-        env = Sc2Env()
+        env = Sc2Env2Outputs()
         env.seed(666)
         numpy.random.seed(666)
 
@@ -107,10 +113,81 @@ def __main__(unused_argv):
         traceback.print_exc()
         pass
 
+def naive_sequential_q_agent_2():
+    try:
+        env = Sc2Env1Output(screen=_SCREEN, visualize=_VISUALIZE)
+        env.seed(2)
+        numpy.random.seed(2)
+
+        #    0/no_op                                              ()
+        #    7/select_army                                        (7/select_add [2])
+        #  331/Move_screen                                        (3/queued [2]; 0/screen [84, 84])
+
+        nb_actions = env._SCREEN * env._SCREEN + 1
+
+        print(nb_actions)
+
+        main_input = Input(shape=(1, env._SCREEN, env._SCREEN), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+
+        tower_1 = Conv2D(64, (1, 1), padding='same', activation='relu')(permuted_input)
+        tower_1 = Conv2D(64, (3, 3), padding='same', activation='relu')(tower_1)
+
+        tower_2 = Conv2D(64, (1, 1), padding='same', activation='relu')(permuted_input)
+        tower_2 = Conv2D(64, (5, 5), padding='same', activation='relu')(tower_2)
+
+        tower_3 = MaxPooling2D((3, 3), strides=(1, 1), padding='same')(permuted_input)
+        tower_3 = Conv2D(64, (1, 1), padding='same', activation='relu')(tower_3)
+
+        inception_output = keras.layers.concatenate([tower_1, tower_2, tower_3], axis=1)
+
+        dense1 = Flatten()(inception_output)
+        dense1 = Dense(nb_actions, activation='relu')(dense1)
+        dense1 = Dense(nb_actions, activation='relu')(dense1)
+
+        model = Model(main_input, dense1)
+        print(model.summary())
+
+        memory = SequentialMemory(limit=1000000, window_length=1)
+        # policy = BoltzmannQPolicy()
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                                      nb_steps=300000)
+        # policy = Sc2Policy(env)
+        # processor = Sc2Processor()
+
+        dqn = DQNAgent(model=model, nb_actions=nb_actions, enable_dueling_network=True, memory=memory,
+                       nb_steps_warmup=1000, enable_double_dqn=True,
+                       policy=policy, gamma=.99, target_model_update=10000, train_interval=4, delta_clip=1.)
+
+        dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+
+        weights_filename = 'dqn_{}_weights.h5f'.format(_ENV_NAME)
+        checkpoint_weights_filename = 'dqn_' + _ENV_NAME + '_weights_{step}.h5f'
+        log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
+
+        if _TEST:
+            dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_2310000_16dim_20step.h5f')
+            dqn.test(env, nb_episodes=10, visualize=False)
+        else:
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=30000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
+
 
 def naive_sequential_q_agent():
     try:
-        env = Sc2Env()
+        env = Sc2Env1Output()
         env.seed(1234)
         numpy.random.seed(123)
 
