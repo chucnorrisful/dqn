@@ -29,7 +29,7 @@ _MINIMAP = 24
 _VISUALIZE = False
 _EPISODES = 1000
 
-_TEST = True
+_TEST = False
 
 
 def __main__(unused_argv):
@@ -80,8 +80,8 @@ def __main__(unused_argv):
 
         dqn.compile(Adam(lr=0.00025), metrics=['mae'])
 
-        dqn.load_weights('dqn_MoveToBeacon_weights_3000000.h5f')
-        dqn.step = 3000000
+        dqn.load_weights('dqn_MoveToBeacon_weights_4550000_24dim_8step_rullyConv_v2.h5f')
+        dqn.step = 4550000
 
         weights_filename = 'dqn_{}_weights.h5f'.format(_ENV_NAME)
         checkpoint_weights_filename = 'dqn_' + _ENV_NAME + '_weights_{step}.h5f'
