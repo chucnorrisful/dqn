@@ -63,32 +63,37 @@ def __main__(unused_argv):
 
         print(act_out.shape)
         print(coord_out.shape)
-        print(full_conv_sc2.summary())
+        # print(full_conv_sc2.summary())
 
         memory = SequentialMemory(limit=1000000, window_length=1)
         # policy = BoltzmannQPolicy()
         policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=.1, value_test=.05,
                                       nb_steps=20000)
+
+        test_policy = Sc2Policy(env=env, eps=0.005)
         # policy = Sc2Policy(env)
         # processor = Sc2Processor()
 
         dqn = SC2DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN, enable_dueling_network=False, memory=memory,
                        nb_steps_warmup=1000, enable_double_dqn=False,
-                       policy=policy, gamma=.99, target_model_update=10000, train_interval=2, delta_clip=1.)
+                       policy=policy, test_policy=test_policy, gamma=.99, target_model_update=10000, train_interval=2, delta_clip=1.)
 
         dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+
+        dqn.load_weights('dqn_MoveToBeacon_weights_4550000_24dim_8step_rullyConv_v2.h5f')
+        dqn.step = 4550000
 
         weights_filename = 'dqn_{}_weights.h5f'.format(_ENV_NAME)
         checkpoint_weights_filename = 'dqn_' + _ENV_NAME + '_weights_{step}.h5f'
         log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
 
         if _TEST:
-            dqn.load_weights('dqn_MoveToBeacon_weights_3000000.h5f')
-            dqn.test(env, nb_episodes=10, visualize=False)
+            dqn.load_weights('dqn_MoveToBeacon_weights_6300000.h5f')
+            dqn.test(env, nb_episodes=10, visualize=True)
         else:
-            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=30000)]
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
-            dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000)
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000)
 
             dqn.save_weights(weights_filename, overwrite=True)
 

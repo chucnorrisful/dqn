@@ -217,6 +217,14 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
             sum_loss_b = K.sum(loss[1])
             return K.sum([sum_loss_a, sum_loss_b], axis=-1)
 
+        def clipped_masked_error_v2(args):
+            y_true_a, y_true_b, y_pred_a, y_pred_b, mask_a, mask_b = args
+            loss2 = huber_loss(y_true_a, y_pred_a, self.delta_clip)
+            loss2 *= 0
+            loss = huber_loss(y_true_b, y_pred_b, self.delta_clip)
+            loss *= mask_b  # apply element-wise mask
+            return K.sum(loss, axis=-1) + K.sum(loss2, axis=-1)
+
         # Create trainable model. The problem is that we need to mask the output since we only
         # ever want to update the Q values for a certain action. The way we achieve this is by
         # using a custom Lambda layer that computes the loss. This gives us the necessary flexibility

@@ -13,9 +13,9 @@ class Sc2Env(Env):
     last_obs = None
 
     _ENV_NAME = "MoveToBeacon"
-    _SCREEN = 16
-    _MINIMAP = 16
-    _VISUALIZE = False
+    _SCREEN = 24
+    _MINIMAP = 24
+    _VISUALIZE = True
 
     def __init__(self):
         print("init SC2")
@@ -29,7 +29,7 @@ class Sc2Env(Env):
                 ),
                 use_feature_units=True
             ),
-            step_mul=20,
+            step_mul=8,
             game_steps_per_episode=0,
             visualize=self._VISUALIZE
         )
@@ -38,7 +38,8 @@ class Sc2Env(Env):
 
         real_action = FUNCTIONS.no_op()
 
-        if act.action >= 1:
+        # hacked to only move_screen
+        if act.action >= 0:
             if 331 in self.last_obs.observation.available_actions:
 
                 real_action = FUNCTIONS.Move_screen("now", (act.coords[0], act.coords[1]))
