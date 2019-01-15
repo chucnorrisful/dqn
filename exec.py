@@ -24,12 +24,12 @@ from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 _ENV_NAME = "MoveToBeacon"
-_SCREEN = 24
-_MINIMAP = 24
+_SCREEN = 16
+_MINIMAP = 16
 _VISUALIZE = False
 _EPISODES = 1000
 
-_TEST = False
+_TEST = True
 
 
 def __main__(unused_argv):
@@ -80,17 +80,18 @@ def __main__(unused_argv):
 
         dqn.compile(Adam(lr=0.00025), metrics=['mae'])
 
-        dqn.load_weights('dqn_MoveToBeacon_weights_4550000_24dim_8step_rullyConv_v2.h5f')
-        dqn.step = 4550000
-
         weights_filename = 'dqn_{}_weights.h5f'.format(_ENV_NAME)
         checkpoint_weights_filename = 'dqn_' + _ENV_NAME + '_weights_{step}.h5f'
         log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
 
         if _TEST:
-            dqn.load_weights('dqn_MoveToBeacon_weights_6300000.h5f')
-            dqn.test(env, nb_episodes=10, visualize=True)
+            dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_6300000_fullyConv_v1.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
         else:
+
+            dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_6300000_fullyConv_v1.h5f')
+            dqn.step = 6300000
+
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
             dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000)

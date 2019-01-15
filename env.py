@@ -13,9 +13,9 @@ class Sc2Env(Env):
     last_obs = None
 
     _ENV_NAME = "MoveToBeacon"
-    _SCREEN = 24
-    _MINIMAP = 24
-    _VISUALIZE = True
+    _SCREEN = 16
+    _MINIMAP = 16
+    _VISUALIZE = False
 
     def __init__(self):
         print("init SC2")
@@ -29,7 +29,7 @@ class Sc2Env(Env):
                 ),
                 use_feature_units=True
             ),
-            step_mul=8,
+            step_mul=20,
             game_steps_per_episode=0,
             visualize=self._VISUALIZE
         )
@@ -54,7 +54,7 @@ class Sc2Env(Env):
         observation = self.env.step(actions=(real_action,))
         # print("stepped", observation[0].observation["feature_screen"][5])
         self.last_obs = observation[0]
-        small_observation = observation[0].observation["feature_screen"][6]
+        small_observation = observation[0].observation.feature_screen.unit_type
         # small_observation = small_observation.reshape(1, small_observation.shape[0], small_observation.shape[0], 1)
 
         return small_observation, observation[0].reward, observation[0].last(), {}
@@ -64,7 +64,7 @@ class Sc2Env(Env):
 
         observation = self.env.step(actions=(FUNCTIONS.select_army("select"),))
         self.last_obs = observation[0]
-        small_observation = observation[0].observation["feature_screen"][6]
+        small_observation = observation[0].observation.feature_screen.unit_type
         # small_observation = small_observation.reshape(1, small_observation.shape[0], small_observation.shape[0], 1)
 
         return small_observation
