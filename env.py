@@ -12,9 +12,10 @@ class Sc2Env1Output(Env):
     env: sc2_env.SC2Env = None
     last_obs = None
 
-    _ENV_NAME = "MoveToBeacon"
-    _SCREEN = 16
-    _MINIMAP = 16
+    _ENV_NAME = "CollectMineralShards"
+    # _ENV_NAME = "MoveToBeacon"
+    _SCREEN = 32
+    _MINIMAP = 32
     _VISUALIZE = False
 
     def __init__(self, screen=16, visualize=False):
@@ -34,22 +35,28 @@ class Sc2Env1Output(Env):
                 ),
                 use_feature_units=True
             ),
-            step_mul=20,
+            step_mul=8,
             game_steps_per_episode=0,
             visualize=self._VISUALIZE
         )
 
     def action_to_sc2(self, act):
-
         real_action = FUNCTIONS.no_op()
 
         # hacked to only move_screen
-        if act > 0:
+        if 0 < act <= self._SCREEN * self._SCREEN:
             if 331 in self.last_obs.observation.available_actions:
-
-                x = int((act-1) / self._SCREEN)
-                y = (act-1) % self._SCREEN
+                arg = act - 1
+                x = int(arg / self._SCREEN)
+                y = arg % self._SCREEN
                 real_action = FUNCTIONS.Move_screen("now", (x, y))
+
+        elif self._SCREEN * self._SCREEN < act < self._SCREEN * self._SCREEN * 2:
+            # if FUNCTIONS.select_point.id in self.last_obs.observation.available_actions:
+            arg = act - 1 - self._SCREEN * self._SCREEN
+            x = int(arg / self._SCREEN)
+            y = arg % self._SCREEN
+            real_action = FUNCTIONS.select_point("toggle", (x, y))
 
         return real_action
 
@@ -60,16 +67,16 @@ class Sc2Env1Output(Env):
 
         observation = self.env.step(actions=(real_action,))
         self.last_obs = observation[0]
-        small_observation = observation[0].observation.feature_screen.unit_type
+        small_observation = [observation[0].observation.feature_screen.player_relative, observation[0].observation.feature_screen.selected]
 
         return small_observation, observation[0].reward, observation[0].last(), {}
 
     def reset(self):
-        self.env.reset()
+        observation = self.env.reset()
 
-        observation = self.env.step(actions=(FUNCTIONS.select_army("select"),))
+        # observation = self.env.step(actions=(FUNCTIONS.select_army("select"),))
         self.last_obs = observation[0]
-        small_observation = observation[0].observation.feature_screen.unit_type
+        small_observation = np.array([observation[0].observation.feature_screen.player_relative, observation[0].observation.feature_screen.selected])
 
         return small_observation
 
@@ -132,7 +139,7 @@ class Sc2Env2Outputs(Env):
                 ),
                 use_feature_units=True
             ),
-            step_mul=20,
+            step_mul=8,
             game_steps_per_episode=0,
             visualize=self._VISUALIZE
         )

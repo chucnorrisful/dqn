@@ -1,7 +1,14 @@
 from rl.core import Processor
+import numpy as np
 
 
 class Sc2Processor(Processor):
+
+    def process_state_batch(self, batch):
+
+        size_first_dim = len(batch)
+
+        return np.reshape(batch, (size_first_dim, 2, 32, 32))
 
     # observation, reward, done, info = env.step(action)
     def process_observation(self, observation):
@@ -15,6 +22,9 @@ class Sc2Processor(Processor):
         # print(smallObservation.shape)
 
         # print(smallObservation, observation[0].reward, observation[0].last(), "lol")
+
+        # fix dim from 1 1 2 16 16 to 1 2 16 16
+        # observation = observation[0]
 
         return observation
 

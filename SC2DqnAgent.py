@@ -79,7 +79,6 @@ class AbstractSc2DQNAgent(Agent):
         # assert q_values.shape == (len(state_batch), self.nb_actions) (len(state_batch), 2)
         return q_values
 
-    # TODO: .flatten() crashes; find out what c_q_v() does and where its used
     def compute_q_values(self, state):
         q_values = self.compute_batch_q_values([state])
         # q_values = self.compute_batch_q_values([state]).flatten()
@@ -138,7 +137,7 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
         self.enable_dueling_network = enable_dueling_network
         self.dueling_type = dueling_type
 
-        # TODO: fix dueling
+        # dueling not working
         if self.enable_dueling_network:
 
             # get the second last layer of the model, abandon the last layer
@@ -219,11 +218,14 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
 
         def clipped_masked_error_v2(args):
             y_true_a, y_true_b, y_pred_a, y_pred_b, mask_a, mask_b = args
-            loss2 = huber_loss(y_true_a, y_pred_a, self.delta_clip)
-            loss2 *= 0
-            loss = huber_loss(y_true_b, y_pred_b, self.delta_clip)
-            loss *= mask_b  # apply element-wise mask
-            return K.sum(loss, axis=-1) + K.sum(loss2, axis=-1)
+            loss = [huber_loss(y_true_a, y_pred_a, self.delta_clip),
+                    huber_loss(y_true_b, y_pred_b, self.delta_clip)]
+            loss[0] *= mask_a  # apply element-wise mask
+            loss[1] *= mask_b  # apply element-wise mask
+            sum_loss_a = K.sum(loss[0])
+            sum_loss_a = sum_loss_a * 0
+            sum_loss_b = K.sum(loss[1])
+            return K.sum([sum_loss_a, sum_loss_b], axis=-1)
 
         # Create trainable model. The problem is that we need to mask the output since we only
         # ever want to update the Q values for a certain action. The way we achieve this is by
@@ -246,7 +248,7 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
         # <tf.Tensor 'mask:0' shape=(?, 2, 1) dtype=float32>,
         # <tf.Tensor 'mask_1:0' shape=(?, 16, 16, 1) dtype=float32>].
         # All inputs to the layer should be tensors.
-        loss_out = Lambda(clipped_masked_error, output_shape=(1,), name='loss')([y_true_a, y_true_b, y_pred[0], y_pred[1], mask_a, mask_b])
+        loss_out = Lambda(clipped_masked_error_v2, output_shape=(1,), name='loss')([y_true_a, y_true_b, y_pred[0], y_pred[1], mask_a, mask_b])
         ins = [self.model.input] if type(self.model.input) is not list else self.model.input
 
         trainable_model = Model(inputs=ins + [y_true_a, y_true_b, mask_a, mask_b], outputs=[loss_out, y_pred[0], y_pred[1]])
@@ -382,7 +384,7 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
             # Set discounted reward to zero for all states that were terminal.
             discounted_reward_batch_a = discounted_reward_batch_a * terminal1_batch[:]
             discounted_reward_batch_b = discounted_reward_batch_b * terminal1_batch[:]
-            # TODO: try np.einsum('ij,i->ij',A,b)
+            # INFO: try np.einsum('ij,i->ij',A,b)
             # assert discounted_reward_batch.shape == reward_batch.shape nope
             Rs_a = reward_batch[:] + discounted_reward_batch_a
             Rs_b = reward_batch[:] + discounted_reward_batch_b
