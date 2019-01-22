@@ -12,7 +12,7 @@ class Sc2Env1Output(Env):
     env: sc2_env.SC2Env = None
     last_obs = None
 
-    _ENV_NAME = "CollectMineralShards"
+    _ENV_NAME = "MoveToBeacon"
     # _ENV_NAME = "MoveToBeacon"
     _SCREEN = 32
     _MINIMAP = 32
@@ -74,7 +74,7 @@ class Sc2Env1Output(Env):
     def reset(self):
         observation = self.env.reset()
 
-        # observation = self.env.step(actions=(FUNCTIONS.select_army("select"),))
+        observation = self.env.step(actions=(FUNCTIONS.select_army("select"),))
         self.last_obs = observation[0]
         small_observation = np.array([observation[0].observation.feature_screen.player_relative, observation[0].observation.feature_screen.selected])
 

@@ -37,7 +37,7 @@ _TEST = False
 
 def __main__(unused_argv):
 
-    seq_q_agent_3()
+    seq_q_agent_4()
 
 
 def fully_conf_q_agent():
@@ -116,7 +116,77 @@ def fully_conf_q_agent():
         pass
 
 
-# should be capable of MTB and CMS
+def seq_q_agent_4():
+    try:
+        env = Sc2Env1Output(screen=_SCREEN, visualize=_VISUALIZE)
+        env.seed(42)
+        numpy.random.seed(42)
+
+        #    0/no_op                                              ()
+        #    7/select_army                                        (7/select_add [2])
+        #  331/Move_screen                                        (3/queued [2]; 0/screen [84, 84])
+
+        nb_actions = 1 + env._SCREEN * env._SCREEN
+
+        print(nb_actions)
+
+        main_input = Input(shape=(2, env._SCREEN, env._SCREEN), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+
+        tower_1 = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        tower_1 = Conv2D(16, (3, 3), padding='same', activation='relu')(tower_1)
+        tower_1 = Conv2D(1, (1, 1), padding='same', activation='relu')(tower_1)
+
+        dense1 = Flatten()(tower_1)
+        dense1 = Dense(nb_actions, activation='relu')(dense1)
+
+        model = Model(main_input, dense1)
+        print(model.summary())
+
+        memory = SequentialMemory(limit=1000000, window_length=1)
+        # policy = BoltzmannQPolicy()
+        policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                                      nb_steps=1000000)
+        policy = EpsGreedyQPolicy()
+        # policy = Sc2Policy(env)
+
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        dqn = DQNAgent(model=model, nb_actions=nb_actions, enable_dueling_network=True, memory=memory,
+                       nb_steps_warmup=10000, enable_double_dqn=True, processor=processor,
+                       policy=policy, gamma=.99, target_model_update=10000, train_interval=2, delta_clip=1.)
+
+        dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+
+        weights_filename = 'dqn_{}_weights.h5f'.format(_ENV_NAME)
+        checkpoint_weights_filename = 'dqn_' + _ENV_NAME + '_weights_{step}.h5f'
+        log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
+
+        if _TEST:
+            dqn.load_weights('dqn_MoveToBeacon_weights_4800000_ol.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
+        else:
+
+            dqn.load_weights('dqn_MoveToBeacon_weights_4800000_ol.h5f')
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=30000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000,
+                    action_repetition=3)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
+
+
+# should be capable of MTB and CMS but is not really
 def seq_q_agent_3():
     try:
         env = Sc2Env1Output(screen=_SCREEN, visualize=_VISUALIZE)
@@ -127,7 +197,7 @@ def seq_q_agent_3():
         #    7/select_army                                        (7/select_add [2])
         #  331/Move_screen                                        (3/queued [2]; 0/screen [84, 84])
 
-        nb_actions = 1 + env._SCREEN * env._SCREEN * 2
+        nb_actions = 1 + env._SCREEN * env._SCREEN
 
         print(nb_actions)
 
@@ -147,9 +217,9 @@ def seq_q_agent_3():
         memory = SequentialMemory(limit=1000000, window_length=1)
         # policy = BoltzmannQPolicy()
         policy = LinearAnnealedPolicy(EpsGreedyQPolicy(), attr='eps', value_max=1., value_min=.1, value_test=.05,
-                                      nb_steps=1500000)
+                                      nb_steps=1000000)
         # policy = Sc2Policy(env)
-        processor = Sc2Processor()
+        processor = Sc2Processor(screen=env._SCREEN)
 
         dqn = DQNAgent(model=model, nb_actions=nb_actions, enable_dueling_network=True, memory=memory,
                        nb_steps_warmup=10000, enable_double_dqn=True, processor=processor,
@@ -162,10 +232,9 @@ def seq_q_agent_3():
         log_filename = 'dqn_{}_log.json'.format(_ENV_NAME)
 
         if _TEST:
-            dqn.load_weights('dqn_MoveToBeacon_weights_1290000_stay.h5f')
+            dqn.load_weights('dqn_MoveToBeacon_weights_1890000.h5f')
             dqn.test(env, nb_episodes=20, visualize=True)
         else:
-            dqn.load_weights('dqn_MoveToBeacon_weights_1290000_stay.h5f')
 
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=30000)]
             callbacks += [FileLogger(log_filename, interval=100)]

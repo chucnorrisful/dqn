@@ -4,11 +4,14 @@ import numpy as np
 
 class Sc2Processor(Processor):
 
+    def __init__(self, screen=16):
+        super(Processor, self).__init__()
+        self._SCREEN = screen
+
     def process_state_batch(self, batch):
-
+        # reshape cause batch is (bs, 1, 2, screen, screen)
         size_first_dim = len(batch)
-
-        return np.reshape(batch, (size_first_dim, 2, 32, 32))
+        return np.reshape(batch, (size_first_dim, 2, self._SCREEN, self._SCREEN))
 
     # observation, reward, done, info = env.step(action)
     def process_observation(self, observation):
