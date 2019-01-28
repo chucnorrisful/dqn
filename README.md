@@ -19,8 +19,8 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 --- 
 ### Challenges and Benchmarks (Deepmind SC2 minigames)
 
-- [ ] MoveToBeacon
-- [ ] CollectMineralShards
+- [x] MoveToBeacon
+- [x] CollectMineralShards
 - [ ] FindAndDefeatZerglings
 - [ ] DefeatRoaches
 - [ ] DefeatZerglingsAndBanelings
