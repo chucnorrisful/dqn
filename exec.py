@@ -33,8 +33,8 @@ _ENV_NAME = "CollectMineralShards"
 _SCREEN = 32
 _MINIMAP = 16
 
-_VISUALIZE = True
-_TEST = True
+_VISUALIZE = False
+_TEST = False
 
 
 # IDEAS:
@@ -58,11 +58,11 @@ def fully_conf_q_agent_4():
 
         nb_actions = 3
         agent_name = "fullyConv_v4"
-        run_name = "01"
+        run_name = "02"
 
         # print(nb_actions)
 
-        main_input = Input(shape=(2, env._SCREEN, env._SCREEN), name='main_input')
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
         permuted_input = Permute((2, 3, 1))(main_input)
         x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
         branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
@@ -132,6 +132,7 @@ def fully_conf_q_agent_4():
         print(e)
         traceback.print_exc()
         pass
+
 
 def fully_conf_q_agent():
     try:
@@ -583,7 +584,7 @@ def simple_scripted_agent():
     # agent = RandomAgent()
 
     try:
-        env = Sc2Env()
+        env = sc2_env.SC2Env()
 
         env.seed(1234)
         numpy.random.seed(123)

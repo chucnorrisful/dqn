@@ -173,9 +173,12 @@ class Sc2Env2Outputs(Env):
         return small_observation, observation[0].reward, observation[0].last(), {}
 
     def reset(self):
-        self.env.reset()
+        observation = self.env.reset()
 
-        observation = self.env.step(actions=(FUNCTIONS.select_army("select"),))
+        if self._TRAINING and np.random.random_integers(0, 1) == 1:
+            ys, xs = np.where(observation[0].observation.feature_screen.player_relative == 1)
+            observation = self.env.step(actions=(FUNCTIONS.select_point("toggle", (xs[0], ys[0])),))
+
         self.last_obs = observation[0]
 
         # small_observation = observation[0].observation.feature_screen.unit_density
@@ -220,3 +223,7 @@ class Sc2Env2Outputs(Env):
 
     def set_minimap(self, minimap: int):
         self._MINIMAP = minimap
+
+    @property
+    def screen(self):
+        return self._SCREEN
