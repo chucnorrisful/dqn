@@ -58,7 +58,7 @@ def fully_conf_q_agent_4():
 
         nb_actions = 3
         agent_name = "fullyConv_v4"
-        run_name = "02"
+        run_name = "03"
 
         # print(nb_actions)
 
@@ -90,8 +90,8 @@ def fully_conf_q_agent_4():
         processor = Sc2Processor(screen=env._SCREEN)
 
         dqn = SC2DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
-                          enable_dueling_network=False, memory=memory, processor=processor, nb_steps_warmup=10000,
-                          enable_double_dqn=False,
+                          enable_dueling_network=False, memory=memory, processor=processor, nb_steps_warmup=100,
+                          enable_double_dqn=True,
                           policy=policy, test_policy=test_policy, gamma=.995, target_model_update=10000,
                           train_interval=4, delta_clip=1.)
 

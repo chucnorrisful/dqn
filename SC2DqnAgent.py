@@ -342,16 +342,24 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
                 # According to the paper "Deep Reinforcement Learning with Double Q-learning"
                 # (van Hasselt et al., 2015), in Double DQN, the online network predicts the actions
                 # while the target network is used to estimate the Q value.
-                q_values = self.model.predict_on_batch(state1_batch)
-                assert q_values.shape == (self.batch_size, self.nb_actions)
-                actions = np.argmax(q_values, axis=1)
-                assert actions.shape == (self.batch_size,)
+                q1_values = self.model.predict_on_batch(state1_batch)
+
+                actions_a = np.argmax(q1_values[0], -1)
+                actions_b = []
+                for ac_b in q1_values[1]:
+                    actions_b.append(np.unravel_index(ac_b.argmax(), ac_b.shape)[0:2])
+                actions_b = np.array(actions_b)
 
                 # Now, estimate Q values using the target network but select the values with the
                 # highest Q value wrt to the online model (as computed above).
-                target_q_values = self.target_model.predict_on_batch(state1_batch)
-                assert target_q_values.shape == (self.batch_size, self.nb_actions)
-                q_batch = target_q_values[range(self.batch_size), actions]
+                target_q1_values = self.target_model.predict_on_batch(state1_batch)
+
+                q_batch_a = target_q1_values[0][range(self.batch_size), actions_a]
+                q_batch_b = []
+                for (i, square_q) in enumerate(target_q1_values[1]):
+                    q_batch_b.append(square_q[:, :, 0][actions_b[i][0], actions_b[i][1]])
+
+                q_batch_b = np.array(q_batch_b)
             else:
 
                 # Compute the q_values given state1, and extract the maximum for each sample in the batch.
