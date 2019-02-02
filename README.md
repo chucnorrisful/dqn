@@ -8,7 +8,7 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 
 - [x] Naive DQN with basic keras-rl dqn agent
 - [x] Fully-conv network with 2 outputs (described in [this deepmind paper](https://deepmind.com/documents/110/sc2le.pdf))
-- [ ] Double DQN
+- [x] Double DQN
 - [ ] Dueling DQN
 - [ ] Prioritized replay
 - [ ] Multi-step learning

@@ -90,9 +90,9 @@ def fully_conf_q_agent_4():
         processor = Sc2Processor(screen=env._SCREEN)
 
         dqn = SC2DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
-                          enable_dueling_network=False, memory=memory, processor=processor, nb_steps_warmup=100,
+                          enable_dueling_network=False, memory=memory, processor=processor, nb_steps_warmup=10000,
                           enable_double_dqn=True,
-                          policy=policy, test_policy=test_policy, gamma=.995, target_model_update=10000,
+                          policy=policy, test_policy=test_policy, gamma=.99, target_model_update=10000,
                           train_interval=4, delta_clip=1.)
 
         dqn.compile(Adam(lr=0.00025), metrics=['mae'])

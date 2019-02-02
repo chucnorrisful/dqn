@@ -69,7 +69,7 @@ class Sc2Env1Output(Env):
     def reset(self):
         observation = self.env.reset()
 
-        if self._TRAINING and np.random.random_integers(0, 1) == 1:
+        if self._TRAINING and np.random.random_integers(1, 1) == 1:
             ys, xs = np.where(observation[0].observation.feature_screen.player_relative == 1)
             observation = self.env.step(actions=(FUNCTIONS.select_point("toggle", (xs[0], ys[0])),))
 
