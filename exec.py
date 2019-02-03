@@ -43,14 +43,102 @@ _TEST = False
 
 def __main__(unused_argv):
 
-    fully_conf_q_agent_4()
+    fully_conf_q_agent_5()
+
+
+def fully_conf_q_agent_5():
+    try:
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(66)
+        numpy.random.seed(66)
+
+        #    0/no_op                                              ()
+        #    7/select_army                                        (7/select_add [2])
+        #  331/Move_screen                                        (3/queued [2]; 0/screen [84, 84])
+
+        nb_actions = 3
+        agent_name = "fullyConv_v5"
+        run_name = "01"
+
+        # print(nb_actions)
+
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        coord_out = Conv2D(1, (1, 1), padding='same', activation='relu')(branch)
+
+        act_out = Flatten()(branch)
+        act_out = Dense(256, activation='relu')(act_out)
+        # act_out = Flatten()(act_out)
+        act_out = Dense(nb_actions, activation='linear')(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        print(act_out.shape)
+        print(coord_out.shape)
+        # print(full_conv_sc2.summary())
+
+        memory = SequentialMemory(limit=1000000, window_length=1)
+        # policy = BoltzmannQPolicy()
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=.1, value_test=.05,
+                                      nb_steps=300000)
+
+        test_policy = Sc2Policy(env=env, eps=0.005)
+        # policy = Sc2Policy(env)
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        dqn = SC2DQNAgent(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
+                          enable_dueling_network=True, memory=memory, processor=processor, nb_steps_warmup=10000,
+                          enable_double_dqn=True,
+                          policy=policy, test_policy=test_policy, gamma=.99, target_model_update=10000,
+                          train_interval=4, delta_clip=1.)
+
+        dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+
+        directory = "weights/{}_{}_{}".format(agent_name, _ENV_NAME, run_name)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        weights_filename = directory + '/dqn_weights.h5f'
+        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
+        log_filename = directory + '/dqn_log.json'
+
+        save_hyper_parameters(full_conv_sc2, env, directory)
+
+        if _TEST:
+            dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/'
+                             'fullyConv_v4_CollectMineralShards_01/dqn_weights_2550000.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
+        else:
+
+            # dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_6300000_fullyConv_v1.h5f')
+            # dqn.step = 6300000
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000,
+                    action_repetition=3)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
 
 
 def fully_conf_q_agent_4():
     try:
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
-        env.seed(666)
-        numpy.random.seed(666)
+        env.seed(66)
+        numpy.random.seed(66)
 
         #    0/no_op                                              ()
         #    7/select_army                                        (7/select_add [2])
@@ -58,7 +146,7 @@ def fully_conf_q_agent_4():
 
         nb_actions = 3
         agent_name = "fullyConv_v4"
-        run_name = "03"
+        run_name = "05"
 
         # print(nb_actions)
 

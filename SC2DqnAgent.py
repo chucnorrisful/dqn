@@ -3,7 +3,7 @@ import warnings
 
 import keras.backend as K
 from keras.models import Model
-from keras.layers import Lambda, Input, Layer, Dense
+from keras.layers import Lambda, Input, Layer, Dense, Conv2D, Flatten
 from rl.agents.dqn import AbstractDQNAgent
 from rl.core import Agent
 from rl.policy import EpsGreedyQPolicy, GreedyQPolicy
@@ -140,9 +140,12 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
         # dueling not working
         if self.enable_dueling_network:
 
+            # linearOutput
             # get the second last layer of the model, abandon the last layer
-            layer = model.layers[-2]
-            nb_action = model.output._keras_shape[-1]
+            # layer = model.layers[-2]
+            layer = model.layers[5]
+            # nb_action = model.output._keras_shape[-1]
+            nb_action = model.output[0]._keras_shape[-1]
             # layer y has a shape (nb_action+1,)
             # y[:,0] represents V(s;theta)
             # y[:,1:] represents A(s,a;theta)
@@ -155,17 +158,39 @@ class SC2DQNAgent(AbstractSc2DQNAgent):
             # dueling_type == 'naive'
             # Q(s,a;theta) = V(s;theta) + A(s,a;theta)
             if self.dueling_type == 'avg':
-                outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.mean(a[:, 1:], keepdims=True),
+                lin_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.mean(a[:, 1:], keepdims=True),
                                      output_shape=(nb_action,))(y)
             elif self.dueling_type == 'max':
-                outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.max(a[:, 1:], keepdims=True),
+                lin_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.max(a[:, 1:], keepdims=True),
                                      output_shape=(nb_action,))(y)
             elif self.dueling_type == 'naive':
-                outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:], output_shape=(nb_action,))(y)
+                lin_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:], output_shape=(nb_action,))(y)
             else:
                 assert False, "dueling_type must be one of {'avg','max','naive'}"
 
-            model = Model(inputs=model.input, outputs=outputlayer)
+            # conv layer > include 1,1x1 conv (?)
+            conv_layer = model.output[1]
+            conv_size = model.output[1]._keras_shape[1]
+
+            conv_flat = Flatten()(conv_layer)
+            conv_value = Dense(1, activation="linear")(conv_flat)
+            conv_action = Conv2D(1, (1, 1), padding="same", activation="linear")(conv_layer)
+
+            conv_lambda_in = [conv_value, conv_action]
+
+            if self.dueling_type == 'avg':
+                conv_outputlayer = Lambda(
+                    lambda a: K.expand_dims(K.expand_dims(a[0], -1), -1) + a[1] - K.mean(a[1], keepdims=True)
+                                          )(conv_lambda_in)
+            elif self.dueling_type == 'max':
+                conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.max(a[:, 1:], keepdims=True),
+                                     output_shape=(nb_action,))(y)
+            elif self.dueling_type == 'naive':
+                conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:], output_shape=(nb_action,))(y)
+            else:
+                assert False, "dueling_type must be one of {'avg','max','naive'}"
+
+            model = Model(inputs=model.input, outputs=[lin_outputlayer, conv_outputlayer])
 
         # Related objects.
         self.model = model
