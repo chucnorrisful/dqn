@@ -1,6 +1,6 @@
 from rl.policy import Policy
 import numpy as np
-from SC2DqnAgent import Sc2Action
+from sc2DqnAgent import Sc2Action
 
 
 class Sc2Policy(Policy):
@@ -22,7 +22,7 @@ class Sc2Policy(Policy):
         """
         assert self.sc2_env
         # assert q_values.ndim == 1
-        nb_actions = 2
+        nb_actions = 3
         nb_pixels = self.sc2_env._SCREEN
 
         action = Sc2Action()

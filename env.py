@@ -149,14 +149,20 @@ class Sc2Env2Outputs(Env):
 
         real_action = FUNCTIONS.no_op()
 
-        if act.action > 0:
+        if act.action == 1:
             if 331 in self.last_obs.observation.available_actions:
 
                 real_action = FUNCTIONS.Move_screen("now", (act.coords[1], act.coords[0]))
 
-        elif act.action > 1:
+        elif act.action == 2:
 
             real_action = FUNCTIONS.select_point("toggle", (act.coords[1], act.coords[0]))
+
+        elif act.action == 0:
+            pass
+        else:
+            print(act.action, "wtf")
+            assert False
 
         return real_action
 
@@ -181,7 +187,7 @@ class Sc2Env2Outputs(Env):
             ys, xs = np.where(observation[0].observation.feature_screen.player_relative == 1)
             observation = self.env.step(actions=(FUNCTIONS.select_point("toggle", (xs[0], ys[0])),))
 
-        observation = self.env.step(actions=(FUNCTIONS.select_army(0),))
+        # observation = self.env.step(actions=(FUNCTIONS.select_army(0),))
 
         self.last_obs = observation[0]
 

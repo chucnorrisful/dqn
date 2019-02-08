@@ -89,5 +89,5 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10) -> None:
     plt.show()
 
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/fullyConv_v5_CollectMineralShards_01/dqn_log.json"],
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v6/01/dqn_log.json"],
            zero_scale=20, smoother=150)
