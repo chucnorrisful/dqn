@@ -1,13 +1,14 @@
 from absl import app
-from env import Sc2Env1Output, Sc2Env2Outputs
+from env import Sc2Env1Output, Sc2Env2Outputs, Sc2Env2OutputsFull
 from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2
-from sc2Processor import Sc2Processor
+from sc2Processor import Sc2Processor, Sc2ProcessorFull
 from sc2Policy import Sc2Policy
 import numpy
 import traceback
 import os
 import json
 from prioReplayBuffer import PrioritizedReplayBuffer
+from baselines.common.schedules import LinearSchedule
 
 from pysc2.env import sc2_env
 from pysc2.lib import features
@@ -30,7 +31,7 @@ from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 
 _ENV_NAME = "MoveToBeacon"
-_SCREEN = 32
+_SCREEN = 26
 _MINIMAP = 16
 
 _VISUALIZE = False
@@ -43,26 +44,28 @@ _TEST = False
 
 def __main__(unused_argv):
 
-    fully_conf_q_agent_5()
+    fully_conf_q_agent_7()
 
 
-def fully_conf_q_agent_6():
+def fully_conf_q_agent_7():
     try:
-        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
-        env.seed(66)
-        numpy.random.seed(66)
-
-        #    0/no_op                                              ()
-        #    7/select_army                                        (7/select_add [2])
-        #  331/Move_screen                                        (3/queued [2]; 0/screen [84, 84])
+        seed = 345753
+        env = Sc2Env2OutputsFull(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(seed)
+        numpy.random.seed(seed)
 
         nb_actions = 3
-        agent_name = "fullyConv_v6"
-        run_name = "02"
+        agent_name = "fullyConv_v7"
+        run_name = "01"
+        dueling = False
+        double = True
+        action_repetition = 1
+        gamma = .99
+        learning_rate = .0001
+        warmup_steps = 4000
+        train_interval = 4
 
-        # print(nb_actions)
-
-        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        main_input = Input(shape=(17, env.screen, env.screen), name='main_input')
         permuted_input = Permute((2, 3, 1))(main_input)
         x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
         branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
@@ -71,33 +74,32 @@ def fully_conf_q_agent_6():
 
         act_out = Flatten()(branch)
         act_out = Dense(256, activation='relu')(act_out)
-        # act_out = Flatten()(act_out)
         act_out = Dense(nb_actions, activation='linear')(act_out)
 
         full_conv_sc2 = Model(main_input, [act_out, coord_out])
 
         print(act_out.shape)
         print(coord_out.shape)
-        # print(full_conv_sc2.summary())
 
-        # memory = SequentialMemory(limit=1000000, window_length=1)
         memory = PrioritizedReplayBuffer(1000000, 0.7)
 
-        # policy = BoltzmannQPolicy()
-        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=.01, value_test=.005,
-                                      nb_steps=100000)
+        eps_start = 1.
+        eps_end = .01
+        eps_steps = 100000
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                      value_test=.005, nb_steps=eps_steps)
 
         test_policy = Sc2Policy(env=env, eps=0.005)
         # policy = Sc2Policy(env)
-        processor = Sc2Processor(screen=env._SCREEN)
+        processor = Sc2ProcessorFull(screen=env._SCREEN)
 
         dqn = Sc2DqnAgent_v2(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
-                             enable_dueling_network=False, memory=memory, processor=processor, nb_steps_warmup=1000,
-                             enable_double_dqn=True,
-                             policy=policy, test_policy=test_policy, gamma=.99, target_model_update=10000,
-                             train_interval=4, delta_clip=1.)
+                             enable_dueling_network=dueling, memory=memory, processor=processor, nb_steps_warmup=warmup_steps,
+                             enable_double_dqn=double,
+                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
+                             train_interval=train_interval, delta_clip=1.)
 
-        dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+        dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
 
         directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
 
@@ -107,8 +109,24 @@ def fully_conf_q_agent_6():
         weights_filename = directory + '/dqn_weights.h5f'
         checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
         log_filename = directory + '/dqn_log.json'
+        log_interval = 8000
 
-        save_hyper_parameters(full_conv_sc2, env, directory)
+        agent_hypers = {
+            "DUELING": dueling,
+            "DOUBLE": double,
+            "ACTION_REPETITION": action_repetition,
+            "GAMMA": gamma,
+            "LEARNING_RATE": learning_rate,
+            "TRAIN_INTERVAL": train_interval,
+            "WARMUP_STEPS": warmup_steps,
+            "LOG_INTERVAL": log_interval,
+            "NB_ACTIONS": nb_actions,
+            "EPS_START": eps_start,
+            "EPS_END": eps_end,
+            "EPS_STEPS": eps_steps,
+            "SEED": seed
+        }
+        save_hyper_parameters(full_conv_sc2, env, directory, agent_hypers)
 
         if _TEST:
             dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/'
@@ -121,8 +139,113 @@ def fully_conf_q_agent_6():
 
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
-            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=10000,
-                    action_repetition=3)
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+                    action_repetition=action_repetition)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
+
+
+def fully_conf_q_agent_6():
+    try:
+        seed = 3567543
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(seed)
+        numpy.random.seed(seed)
+
+        nb_actions = 3
+        agent_name = "fullyConv_v6"
+        run_name = "03"
+        dueling = False
+        double = True
+        action_repetition = 1
+        gamma = .99
+        warmup_steps = 4000
+        train_interval = 4
+
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        coord_out = Conv2D(1, (1, 1), padding='same', activation='relu')(branch)
+
+        act_out = Flatten()(branch)
+        act_out = Dense(256, activation='relu')(act_out)
+        act_out = Dense(nb_actions, activation='linear')(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        print(act_out.shape)
+        print(coord_out.shape)
+
+        memory = PrioritizedReplayBuffer(1000000, 0.7)
+
+        eps_start = 1.
+        eps_end = .01
+        eps_steps = 100000
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                      value_test=.005, nb_steps=eps_steps)
+
+        test_policy = Sc2Policy(env=env, eps=0.005)
+        # policy = Sc2Policy(env)
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        dqn = Sc2DqnAgent_v2(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
+                             enable_dueling_network=dueling, memory=memory, processor=processor, nb_steps_warmup=warmup_steps,
+                             enable_double_dqn=double,
+                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
+                             train_interval=train_interval, delta_clip=1.)
+
+        dqn.compile(Adam(lr=0.00025), metrics=['mae'])
+
+        directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        weights_filename = directory + '/dqn_weights.h5f'
+        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
+        log_filename = directory + '/dqn_log.json'
+        log_interval = 8000
+
+        agent_hypers = {
+            "DUELING": dueling,
+            "DOUBLE": double,
+            "ACTION_REPETITION": action_repetition,
+            "GAMMA": gamma,
+            "TRAIN_INTERVAL": train_interval,
+            "WARMUP_STEPS": warmup_steps,
+            "LOG_INTERVAL": log_interval,
+            "NB_ACTIONS": nb_actions,
+            "EPS_START": eps_start,
+            "EPS_END": eps_end,
+            "EPS_STEPS": eps_steps,
+            "SEED": seed
+        }
+        save_hyper_parameters(full_conv_sc2, env, directory, agent_hypers)
+
+        if _TEST:
+            dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/'
+                             'fullyConv_v4_CollectMineralShards_01/dqn_weights_2550000.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
+        else:
+
+            # dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_6300000_fullyConv_v1.h5f')
+            # dqn.step = 6300000
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+                    action_repetition=action_repetition)
 
             dqn.save_weights(weights_filename, overwrite=True)
 
@@ -138,9 +261,10 @@ def fully_conf_q_agent_6():
 
 def fully_conf_q_agent_5():
     try:
+        seed = 234234
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
-        env.seed(4657)
-        numpy.random.seed(4657)
+        env.seed(seed)
+        numpy.random.seed(seed)
 
         nb_actions = 3
         agent_name = "fullyConv_v5"
@@ -202,6 +326,8 @@ def fully_conf_q_agent_5():
         log_interval = 8000
 
         agent_hypers = {
+            "DUELING": dueling,
+            "DOUBLE": double,
             "ACTION_REPETITION": action_repetition,
             "GAMMA": gamma,
             "TRAIN_INTERVAL": train_interval,
@@ -210,7 +336,8 @@ def fully_conf_q_agent_5():
             "NB_ACTIONS": nb_actions,
             "EPS_START": eps_start,
             "EPS_END": eps_end,
-            "EPS_STEPS": eps_steps
+            "EPS_STEPS": eps_steps,
+            "SEED": seed
         }
         save_hyper_parameters(full_conv_sc2, env, directory, agent_hypers)
 

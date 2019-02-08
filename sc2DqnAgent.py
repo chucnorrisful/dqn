@@ -8,6 +8,7 @@ from rl.agents.dqn import AbstractDQNAgent, Agent
 from agent2 import Agent2
 from rl.policy import EpsGreedyQPolicy, GreedyQPolicy
 from rl.util import *
+from baselines.common.schedules import LinearSchedule
 
 # modded, check
 def mean_q(y_true, y_pred):
@@ -169,28 +170,28 @@ class Sc2DqnAgent_v2(AbstractSc2DQNAgent2):
                 assert False, "dueling_type must be one of {'avg','max','naive'}"
 
             # conv layer > include 1,1x1 conv (?) [yes didnt work now trying no]
-            # conv_layer = model.layers[3].output
+            conv_layer = model.layers[3].output
             # conv_size = model.output[1]._keras_shape[1]
 
-            # conv_flat = Flatten()(conv_layer)
-            # conv_value = Dense(1, activation="linear")(conv_flat)
-            # conv_action = Conv2D(1, (1, 1), padding="same", activation="linear")(conv_layer)
+            conv_flat = Flatten()(conv_layer)
+            conv_value = Dense(1, activation="linear")(conv_flat)
+            conv_action = Conv2D(1, (1, 1), padding="same", activation="linear")(conv_layer)
 
-            # conv_lambda_in = [conv_value, conv_action]
-            #
-            # if self.dueling_type == 'avg':
-            #     conv_outputlayer = Lambda(
-            #         lambda a: K.expand_dims(K.expand_dims(a[0], -1), -1) + a[1] - K.mean(a[1], keepdims=True)
-            #                               )(conv_lambda_in)
-            # elif self.dueling_type == 'max':
-            #     conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.max(a[:, 1:], keepdims=True),
-            #                          output_shape=(nb_action,))(y)
-            # elif self.dueling_type == 'naive':
-            #     conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:], output_shape=(nb_action,))(y)
-            # else:
-            #     assert False, "dueling_type must be one of {'avg','max','naive'}"
+            conv_lambda_in = [conv_value, conv_action]
 
-            model = Model(inputs=model.input, outputs=[lin_outputlayer, model.outputs[1]])
+            if self.dueling_type == 'avg':
+                conv_outputlayer = Lambda(
+                    lambda a: K.expand_dims(K.expand_dims(a[0], -1), -1) + a[1] - K.mean(a[1], keepdims=True)
+                                          )(conv_lambda_in)
+            elif self.dueling_type == 'max':
+                conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.max(a[:, 1:], keepdims=True),
+                                     output_shape=(nb_action,))(y)
+            elif self.dueling_type == 'naive':
+                conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:], output_shape=(nb_action,))(y)
+            else:
+                assert False, "dueling_type must be one of {'avg','max','naive'}"
+
+            model = Model(inputs=model.input, outputs=[lin_outputlayer, conv_outputlayer])
 
         # Related objects.
         self.model = model
@@ -200,6 +201,10 @@ class Sc2DqnAgent_v2(AbstractSc2DQNAgent2):
             test_policy = GreedyQPolicy()
         self.policy = policy
         self.test_policy = test_policy
+
+        self.beta_schedule = LinearSchedule(100000,
+                                       initial_p=0.5,
+                                       final_p=1.0)
 
         # State.
         self.reset_states()
@@ -337,7 +342,7 @@ class Sc2DqnAgent_v2(AbstractSc2DQNAgent2):
 
         # Train the network on a single stochastic batch.
         if self.step > self.nb_steps_warmup and self.step % self.train_interval == 0:
-            experiences = self.memory.sample(self.batch_size, 0.5)
+            experiences = self.memory.sample(self.batch_size, self.beta_schedule.value(self.step))
             assert len(experiences[0]) == self.batch_size
 
             # Start by extracting the necessary parameters (we use a vectorized implementation).
