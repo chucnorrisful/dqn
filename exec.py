@@ -3,6 +3,7 @@ from env import Sc2Env1Output, Sc2Env2Outputs, Sc2Env2OutputsFull
 from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2
 from sc2Processor import Sc2Processor, Sc2ProcessorFull
 from sc2Policy import Sc2Policy
+from customCallbacks import GpuLogger
 import numpy
 import traceback
 import os
@@ -30,8 +31,8 @@ from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 
-_ENV_NAME = "MoveToBeacon"
-_SCREEN = 26
+_ENV_NAME = "CollectMineralShards"
+_SCREEN = 24
 _MINIMAP = 16
 
 _VISUALIZE = False
@@ -50,22 +51,22 @@ def __main__(unused_argv):
 def fully_conf_q_agent_7():
     try:
         seed = 345753
-        env = Sc2Env2OutputsFull(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
         env.seed(seed)
         numpy.random.seed(seed)
 
         nb_actions = 3
         agent_name = "fullyConv_v7"
-        run_name = "01"
+        run_name = "05"
         dueling = False
         double = True
-        action_repetition = 1
+        action_repetition = 3
         gamma = .99
         learning_rate = .0001
         warmup_steps = 4000
         train_interval = 4
 
-        main_input = Input(shape=(17, env.screen, env.screen), name='main_input')
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
         permuted_input = Permute((2, 3, 1))(main_input)
         x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
         branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
@@ -81,7 +82,7 @@ def fully_conf_q_agent_7():
         print(act_out.shape)
         print(coord_out.shape)
 
-        memory = PrioritizedReplayBuffer(1000000, 0.7)
+        memory = PrioritizedReplayBuffer(100000, 0.6)
 
         eps_start = 1.
         eps_end = .01
@@ -91,7 +92,7 @@ def fully_conf_q_agent_7():
 
         test_policy = Sc2Policy(env=env, eps=0.005)
         # policy = Sc2Policy(env)
-        processor = Sc2ProcessorFull(screen=env._SCREEN)
+        processor = Sc2Processor(screen=env._SCREEN)
 
         dqn = Sc2DqnAgent_v2(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
                              enable_dueling_network=dueling, memory=memory, processor=processor, nb_steps_warmup=warmup_steps,
@@ -109,6 +110,7 @@ def fully_conf_q_agent_7():
         weights_filename = directory + '/dqn_weights.h5f'
         checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
         log_filename = directory + '/dqn_log.json'
+        log_filename_gpu = directory + '/dqn_log_gpu.json'
         log_interval = 8000
 
         agent_hypers = {
@@ -139,11 +141,11 @@ def fully_conf_q_agent_7():
 
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
+            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
             dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
                     action_repetition=action_repetition)
 
             dqn.save_weights(weights_filename, overwrite=True)
-
 
     except KeyboardInterrupt:
         pass
@@ -248,7 +250,6 @@ def fully_conf_q_agent_6():
                     action_repetition=action_repetition)
 
             dqn.save_weights(weights_filename, overwrite=True)
-
 
     except KeyboardInterrupt:
         pass

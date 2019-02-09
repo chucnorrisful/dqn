@@ -1,49 +1,27 @@
-import json
+import json, csv
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-def single_plot(path, smoother=100, zero_scale=10):
-    with open(path) as f:
-        data = json.load(f)
-
-    rew = data["episode_reward"]
-    loss = data["loss"]
-
-    smoother = smoother
-
-    smooth = []
-    zero_rate = []
-    for (i, re) in enumerate(rew):
-        start = i - smoother
-        if start < 0:
-            start = 0
-
-        end = i + smoother
-        if end > len(rew) - 1:
-            end = len(rew) - 1
-
-        mean = np.mean(rew[start:end])
-        smooth.append(mean)
-
-        zero = (len(rew[start:end]) - np.count_nonzero(rew[start:end])) * zero_scale / len(rew[start:end])
-        zero_rate.append(zero)
-
-    plt.plot(rew, 'kx', label='reward')
-    plt.plot(loss, 'g-', label='loss')
-    plt.plot(smooth, '-', color='orange', label='mean_reward')
-    plt.plot(zero_rate, 'r-', label='zero_rate')
-    plt.legend()
-    plt.show()
-
-
-def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10) -> None:
+def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=False) -> None:
     rew = []
     loss = []
     mae = []
     mean_q = []
     mean_eps = []
     nb_steps = []
+
+    fan_speed = []
+    mem_used = []
+    gpu_util = []
+    mem_util = []
+    gpu_temp = []
+    gpu_power = []
+
+    cpu_util = []
+    ram_util = []
+    swap_util = []
+
     for path in paths:
         with open(path) as f:
             data = json.load(f)
@@ -54,10 +32,25 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10) -> None:
             mean_eps += data["mean_eps"]
             nb_steps += data["nb_steps"]
 
+        if hw_stats:
+            gpu_path = path[:len(path)-5] + "_gpu.json"
+            with open(gpu_path) as f2:
+                data = json.load(f2)
+                fan_speed += data["fan_speed"]
+                gpu_util += data["gpu_util"]
+                mem_util += data["mem_util"]
+                gpu_temp += data["gpu_temp"]
+                gpu_power += data["gpu_power"]
+                cpu_util += data["cpu_util"]
+                ram_util += data["ram_util"]
+                swap_util += data["swap_util"]
+
     smoother = smoother
 
     smooth = []
     zero_rate = []
+    # rew = rew[400:]
+    # loss = loss[400:]
     for (i, re) in enumerate(rew):
         start = i - smoother
         if start < 0:
@@ -85,9 +78,16 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10) -> None:
     plt.plot(rew, 'kx', label='reward')
     plt.plot(smooth, '-', color='orange', label='mean_reward')
     plt.plot(zero_rate, 'r-', label='zero_rate')
+    if hw_stats:
+        plt.plot(gpu_power, ',-', label='gpu_power')
+        plt.plot(gpu_util, 'c,-', label='gpu_util')
+        plt.plot(mem_util, 'm,-', label='mem_util')
+        plt.plot(ram_util, ',-', label='ram_util')
+        plt.plot(swap_util, ',-', label='swap_util')
+        plt.plot(cpu_util, ',-', label='cpu_util')
     plt.legend()
     plt.show()
 
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v5/04/dqn_log.json"],
-           zero_scale=20, smoother=150)
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/05/dqn_log.json"],
+           zero_scale=20, smoother=100, hw_stats=False)
