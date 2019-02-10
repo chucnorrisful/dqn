@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=False) -> None:
+def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=False, compare=None) -> None:
     rew = []
     loss = []
     mae = []
@@ -21,6 +21,8 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     cpu_util = []
     ram_util = []
     swap_util = []
+
+    cmp_rew = []
 
     for path in paths:
         with open(path) as f:
@@ -45,6 +47,12 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
                 ram_util += data["ram_util"]
                 swap_util += data["swap_util"]
 
+    if compare:
+        for comp in compare:
+            with open(comp) as f:
+                data = json.load(f)
+                cmp_rew += data["episode_reward"]
+
     smoother = smoother
 
     smooth = []
@@ -66,6 +74,21 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
         zero = (len(rew[start:end]) - np.count_nonzero(rew[start:end])) * zero_scale / len(rew[start:end])
         zero_rate.append(zero)
 
+    cmp_smooth = []
+    if compare:
+        cmp_rew = cmp_rew[:len(rew)]
+        for (i, re) in enumerate(cmp_rew):
+            start = i - smoother
+            if start < 0:
+                start = 0
+
+            end = i + smoother
+            if end > len(cmp_rew) - 1:
+                end = len(cmp_rew) - 1
+
+            mean = np.mean(cmp_rew[start:end])
+            cmp_smooth.append(mean)
+
     # find step count by finding steps in nb_steps array
     step_coll = 0
     for i in range(1, len(nb_steps) - 1):
@@ -78,6 +101,8 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     plt.plot(rew, 'kx', label='reward')
     plt.plot(smooth, '-', color='orange', label='mean_reward')
     plt.plot(zero_rate, 'r-', label='zero_rate')
+    if compare:
+        plt.plot(cmp_smooth, '-', color='blue', label='reward_cmp')
     if hw_stats:
         plt.plot(gpu_power, ',-', label='gpu_power')
         plt.plot(gpu_util, 'c,-', label='gpu_util')
@@ -89,5 +114,6 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     plt.show()
 
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/05/dqn_log.json"],
-           zero_scale=20, smoother=100, hw_stats=False)
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v7/07/dqn_log.json"],
+           zero_scale=20, smoother=100, hw_stats=False,
+           compare=["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v5/01/dqn_log.json"])

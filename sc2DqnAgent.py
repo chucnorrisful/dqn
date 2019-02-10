@@ -25,7 +25,7 @@ class Sc2Action:
         self.action = act
 
 
-# V2
+# V2 -> patched to use prioritized replay buffer as memory
 
 
 class AbstractSc2DQNAgent2(Agent2):
@@ -518,7 +518,7 @@ class Sc2DqnAgent_v2(AbstractSc2DQNAgent2):
         self.__test_policy._set_agent(self)
 
 
-# V1
+# V1 -> works with standard keras memory
 
 
 class AbstractSc2DQNAgent(Agent):

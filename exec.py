@@ -20,7 +20,7 @@ from pysc2.agents.random_agent import RandomAgent
 import keras.layers
 
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D, MaxPooling2D
+from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D, MaxPooling2D, Lambda
 
 from keras.optimizers import Adam
 
@@ -31,8 +31,8 @@ from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 
-_ENV_NAME = "CollectMineralShards"
-_SCREEN = 24
+_ENV_NAME = "MoveToBeacon"
+_SCREEN = 32
 _MINIMAP = 16
 
 _VISUALIZE = False
@@ -48,19 +48,19 @@ def __main__(unused_argv):
     fully_conf_q_agent_7()
 
 
-def fully_conf_q_agent_7():
+def conv_no_net_agent():
     try:
-        seed = 345753
+        seed = 343453
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
         env.seed(seed)
         numpy.random.seed(seed)
 
         nb_actions = 3
-        agent_name = "fullyConv_v7"
-        run_name = "05"
+        agent_name = "conv_no_net"
+        run_name = "03"
         dueling = False
         double = True
-        action_repetition = 3
+        action_repetition = 1
         gamma = .99
         learning_rate = .0001
         warmup_steps = 4000
@@ -71,7 +71,7 @@ def fully_conf_q_agent_7():
         x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
         branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
 
-        coord_out = Conv2D(1, (1, 1), padding='same', activation='relu')(branch)
+        coord_out = Conv2D(1, (7, 7), padding="same", activation="linear")(permuted_input)
 
         act_out = Flatten()(branch)
         act_out = Dense(256, activation='relu')(act_out)
@@ -87,6 +87,114 @@ def fully_conf_q_agent_7():
         eps_start = 1.
         eps_end = .01
         eps_steps = 100000
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                      value_test=.005, nb_steps=eps_steps)
+
+        test_policy = Sc2Policy(env=env, eps=0.005)
+        # policy = Sc2Policy(env)
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        dqn = Sc2DqnAgent_v2(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
+                             enable_dueling_network=dueling, memory=memory, processor=processor, nb_steps_warmup=warmup_steps,
+                             enable_double_dqn=double,
+                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
+                             train_interval=train_interval, delta_clip=1.)
+
+        dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
+
+        directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        weights_filename = directory + '/dqn_weights.h5f'
+        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
+        log_filename = directory + '/dqn_log.json'
+        log_filename_gpu = directory + '/dqn_log_gpu.json'
+        log_interval = 8000
+
+        agent_hypers = {
+            "DUELING": dueling,
+            "DOUBLE": double,
+            "ACTION_REPETITION": action_repetition,
+            "GAMMA": gamma,
+            "LEARNING_RATE": learning_rate,
+            "TRAIN_INTERVAL": train_interval,
+            "WARMUP_STEPS": warmup_steps,
+            "LOG_INTERVAL": log_interval,
+            "NB_ACTIONS": nb_actions,
+            "EPS_START": eps_start,
+            "EPS_END": eps_end,
+            "EPS_STEPS": eps_steps,
+            "SEED": seed
+        }
+        save_hyper_parameters(full_conv_sc2, env, directory, agent_hypers)
+
+        if _TEST:
+            dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/'
+                             'fullyConv_v4_CollectMineralShards_01/dqn_weights_2550000.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
+        else:
+
+            # dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_6300000_fullyConv_v1.h5f')
+            # dqn.step = 6300000
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+                    action_repetition=action_repetition)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
+
+
+def fully_conf_q_agent_7():
+    try:
+        seed = 345753
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(seed)
+        numpy.random.seed(seed)
+
+        nb_actions = 3
+        agent_name = "fullyConv_v7"
+        run_name = "07"
+        dueling = True
+        double = True
+        action_repetition = 3
+        gamma = .99
+        learning_rate = .0001
+        warmup_steps = 4000
+        train_interval = 4
+
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        coord_out = Conv2D(1, (1, 1), padding='same', activation='linear')(branch)
+
+        act_out = Flatten()(branch)
+        act_out = Dense(256, activation='relu')(act_out)
+        act_out = Dense(nb_actions, activation='linear')(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        print(act_out.shape)
+        print(coord_out.shape)
+
+        memory = PrioritizedReplayBuffer(200000, 0.7)
+
+        eps_start = 1.
+        eps_end = .01
+        eps_steps = 200000
         policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
                                       value_test=.005, nb_steps=eps_steps)
 
