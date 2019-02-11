@@ -202,7 +202,7 @@ class Sc2DqnAgent_v2(AbstractSc2DQNAgent2):
         self.policy = policy
         self.test_policy = test_policy
 
-        self.beta_schedule = LinearSchedule(100000,
+        self.beta_schedule = LinearSchedule(1000,
                                        initial_p=0.5,
                                        final_p=1.0)
 
@@ -469,7 +469,7 @@ class Sc2DqnAgent_v2(AbstractSc2DQNAgent2):
                 loss[1] *= mask_b  # apply element-wise mask
                 sum_loss_a = np.sum(loss[0])
                 sum_loss_b = np.sum(loss[1])
-                prios.append(abs(np.sum([sum_loss_a, sum_loss_b], axis=-1)))
+                prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
 
             self.memory.update_priorities(id_batch, prios)
 

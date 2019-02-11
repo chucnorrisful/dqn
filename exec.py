@@ -31,7 +31,7 @@ from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 
-_ENV_NAME = "MoveToBeacon"
+_ENV_NAME = "CollectMineralShards"
 _SCREEN = 32
 _MINIMAP = 16
 
@@ -165,13 +165,13 @@ def fully_conf_q_agent_7():
 
         nb_actions = 3
         agent_name = "fullyConv_v7"
-        run_name = "07"
+        run_name = "08"
         dueling = True
         double = True
-        action_repetition = 3
+        action_repetition = 1
         gamma = .99
-        learning_rate = .0001
-        warmup_steps = 4000
+        learning_rate = .00005
+        warmup_steps = 10000
         train_interval = 4
 
         main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
@@ -199,6 +199,8 @@ def fully_conf_q_agent_7():
                                       value_test=.005, nb_steps=eps_steps)
 
         test_policy = Sc2Policy(env=env, eps=0.005)
+        policy = test_policy
+
         # policy = Sc2Policy(env)
         processor = Sc2Processor(screen=env._SCREEN)
 
@@ -244,7 +246,7 @@ def fully_conf_q_agent_7():
             dqn.test(env, nb_episodes=20, visualize=True)
         else:
 
-            # dqn.load_weights('finalWeights/dqn_MoveToBeacon_weights_6300000_fullyConv_v1.h5f')
+            dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_weights_4500000_01.h5f')
             # dqn.step = 6300000
 
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]

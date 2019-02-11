@@ -31,7 +31,7 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
             rew += data["episode_reward"]
             # mae += data["mean_absolute_error"]
             # mean_q += data["mean_q"]
-            mean_eps += data["mean_eps"]
+            # mean_eps += data["mean_eps"]
             nb_steps += data["nb_steps"]
 
         if hw_stats:
@@ -114,6 +114,7 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     plt.show()
 
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v7/07/dqn_log.json"],
-           zero_scale=20, smoother=100, hw_stats=False,
-           compare=["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v5/01/dqn_log.json"])
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
+            "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"],
+           zero_scale=20, smoother=500, hw_stats=False,
+           compare=["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v4_CollectMineralShards_04/dqn_log.json"])

@@ -9,8 +9,8 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 - [x] Naive DQN with basic keras-rl dqn agent
 - [x] Fully-conv network with 2 outputs (described in [this deepmind paper](https://deepmind.com/documents/110/sc2le.pdf))
 - [x] Double DQN
-- [x] Dueling DQN (not tested enough, but implemented)
-- [x] Prioritized replay (not tested enough, but implemented)
+- [x] Dueling DQN
+- [x] Prioritized experience replay
 - [ ] Multi-step learning
 - [ ] Noisy nets
 - [ ] Distributional RL
@@ -19,8 +19,8 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 --- 
 ### Challenges and Benchmarks (Deepmind SC2 minigames)
 
-- [x] MoveToBeacon [mean: 20, max: 25]
-- [x] CollectMineralShards [mean: 60, max: 88]
+- [x] MoveToBeacon [mean: 20, max: 30]
+- [x] CollectMineralShards [mean: 89, max: 120]
 - [ ] FindAndDefeatZerglings
 - [ ] DefeatRoaches
 - [ ] DefeatZerglingsAndBanelings
