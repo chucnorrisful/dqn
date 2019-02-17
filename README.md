@@ -11,7 +11,7 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 - [x] Double DQN
 - [x] Dueling DQN
 - [x] Prioritized experience replay
-- [ ] Multi-step learning
+- [x] Multi-step learning
 - [ ] Noisy nets
 - [ ] Distributional RL
 - [ ] Final [rainbow agent](https://arxiv.org/pdf/1710.02298.pdf)
@@ -19,7 +19,7 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 --- 
 ### Challenges and Benchmarks (Deepmind SC2 minigames)
 
-- [x] MoveToBeacon [mean: 20, max: 30]
+- [x] MoveToBeacon [mean: 23, max: 30]
 - [x] CollectMineralShards [mean: 89, max: 120]
 - [ ] FindAndDefeatZerglings
 - [ ] DefeatRoaches

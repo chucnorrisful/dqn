@@ -114,7 +114,8 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     plt.show()
 
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
-            "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"],
-           zero_scale=20, smoother=500, hw_stats=False,
-           compare=["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v4_CollectMineralShards_04/dqn_log.json"])
+# CMS /home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v4_CollectMineralShards_04/dqn_log.json
+
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v8/02/dqn_log.json"],
+           zero_scale=20, smoother=100, hw_stats=False,
+           compare=["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v7/06/dqn_log.json"])
