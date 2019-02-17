@@ -193,10 +193,12 @@ class Sc2DqnAgent_v3(AbstractSc2DQNAgent3):
                 )(conv_lambda_in)
             elif self.dueling_type == 'max':
                 conv_outputlayer = Lambda(
-                    lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:] - K.max(a[:, 1:], keepdims=True),
-                    output_shape=(nb_action,))(y)
+                    lambda a: K.expand_dims(K.expand_dims(a[0], -1), -1) + a[1] - K.max(a[1], keepdims=True)
+                )(conv_lambda_in)
             elif self.dueling_type == 'naive':
-                conv_outputlayer = Lambda(lambda a: K.expand_dims(a[:, 0], -1) + a[:, 1:], output_shape=(nb_action,))(y)
+                conv_outputlayer = Lambda(
+                    lambda a: K.expand_dims(K.expand_dims(a[0], -1), -1) + a[1]
+                )(conv_lambda_in)
             else:
                 assert False, "dueling_type must be one of {'avg','max','naive'}"
 
