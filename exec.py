@@ -3,6 +3,7 @@ from env import Sc2Env1Output, Sc2Env2Outputs, Sc2Env2OutputsFull
 from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3
 from sc2Processor import Sc2Processor, Sc2ProcessorFull
 from sc2Policy import Sc2Policy
+from noisyNetLayers import NoisyDense
 from customCallbacks import GpuLogger
 import numpy
 import traceback
@@ -39,9 +40,123 @@ _TEST = False
 
 
 def __main__(unused_argv):
-    fully_conf_q_agent_8()
+    fully_conf_q_agent_9()
 
 
+# noisy nets
+def fully_conf_q_agent_9():
+    try:
+        seed = 345753
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(seed)
+        numpy.random.seed(seed)
+
+        nb_actions = 3
+        agent_name = "fullyConv_v8"
+        run_name = "02"
+        dueling = False
+        double = True
+        action_repetition = 1
+        gamma = .99
+        learning_rate = .0001
+        warmup_steps = 4000
+        train_interval = 4
+
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        coord_out = Conv2D(1, (1, 1), padding='same', activation='linear')(branch)
+
+        act_out = Flatten()(branch)
+        act_out = NoisyDense(256, activation='relu')(act_out)
+        act_out = NoisyDense(nb_actions, activation='linear')(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        print(act_out.shape)
+        print(coord_out.shape)
+
+        memory = PrioritizedReplayBuffer(200000, 0.6)
+
+        eps_start = 1.
+        eps_end = .01
+        eps_steps = 400000
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                      value_test=.005, nb_steps=eps_steps)
+
+        test_policy = Sc2Policy(env=env, eps=0.005)
+        # policy = test_policy
+
+        # policy = Sc2Policy(env)
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        dqn = Sc2DqnAgent_v3(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
+                             enable_dueling_network=dueling, memory=memory, processor=processor,
+                             nb_steps_warmup=warmup_steps,
+                             enable_double_dqn=double,
+                             multi_step_size=3,
+                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
+                             train_interval=train_interval, delta_clip=1., custom_model_objects={'NoisyDense':NoisyDense})
+
+        dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
+
+        directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        weights_filename = directory + '/dqn_weights.h5f'
+        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
+        log_filename = directory + '/dqn_log.json'
+        log_filename_gpu = directory + '/dqn_log_gpu.json'
+        log_interval = 8000
+
+        agent_hypers = {
+            "DUELING": dueling,
+            "DOUBLE": double,
+            "ACTION_REPETITION": action_repetition,
+            "GAMMA": gamma,
+            "LEARNING_RATE": learning_rate,
+            "TRAIN_INTERVAL": train_interval,
+            "WARMUP_STEPS": warmup_steps,
+            "LOG_INTERVAL": log_interval,
+            "NB_ACTIONS": nb_actions,
+            "EPS_START": eps_start,
+            "EPS_END": eps_end,
+            "EPS_STEPS": eps_steps,
+            "SEED": seed
+        }
+        save_hyper_parameters(full_conv_sc2, env, directory, agent_hypers)
+
+        if _TEST:
+            dqn.load_weights(
+                '/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_weights_6800000.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
+        else:
+
+            # dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_weights_4500000_01.h5f')
+            # dqn.step = 6300000
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+                    action_repetition=action_repetition)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+    except KeyboardInterrupt:
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
+
+
+# multi-step
 def fully_conf_q_agent_8():
     try:
         seed = 345753
