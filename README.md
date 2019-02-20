@@ -19,7 +19,7 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 --- 
 ### Challenges and Benchmarks (Deepmind SC2 minigames)
 
-- [x] MoveToBeacon [mean: 23, max: 30]
+- [x] MoveToBeacon [mean: 26, max: 32]
 - [x] CollectMineralShards [mean: 89, max: 120]
 - [ ] FindAndDefeatZerglings
 - [ ] DefeatRoaches
