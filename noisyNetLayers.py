@@ -1,6 +1,6 @@
 from keras import backend as K
 from keras.layers import Dense, conv_utils, activations, regularizers, constraints
-from keras.layers.convolutional import _Conv
+from keras.layers.convolutional import _Conv, Conv2D
 from keras.engine.base_layer import InputSpec
 from keras import initializers
 
@@ -14,7 +14,7 @@ class NoisyDense(Dense):
         self.input_dim = input_shape[-1]
 
         self.kernel = self.add_weight(shape=(self.input_dim, self.units),
-                                      initializer=initializers.get('lecun_uniform'),
+                                      initializer=self.kernel_initializer,
                                       name='kernel',
                                       regularizer=None,
                                       constraint=None)
@@ -25,29 +25,20 @@ class NoisyDense(Dense):
                                       regularizer=None,
                                       constraint=None)
 
-        # self.kernel_epsilon = self.add_weight(shape=(input_dim, self.units),
-        #                               initializer=initializers.get('zeros'),
-        #                               name='kernel_epsilon',
-        #                               regularizer=None,
-        #                               constraint=None)
+        if self.use_bias:
+            self.bias = self.add_weight(shape=(self.units,),
+                                        initializer=self.bias_initializer,
+                                        name='bias',
+                                        regularizer=None,
+                                        constraint=None)
 
-        self.bias = self.add_weight(shape=(self.units,),
-                                    initializer=initializers.get('lecun_uniform'),
-                                    name='bias',
-                                    regularizer=None,
-                                    constraint=None)
-
-        self.bias_sigma = self.add_weight(shape=(self.units,),
-                                    initializer=initializers.Constant(0.017),
-                                    name='bias_sigma',
-                                    regularizer=None,
-                                    constraint=None)
-
-        # self.bias_epsilon = self.add_weight(shape=(self.units,),
-        #                             initializer=initializers.get('zeros'),
-        #                             name='bias_epsilon',
-        #                             regularizer=None,
-        #                             constraint=None)
+            self.bias_sigma = self.add_weight(shape=(self.units,),
+                                        initializer=initializers.Constant(0.017),
+                                        name='bias_sigma',
+                                        regularizer=None,
+                                        constraint=None)
+        else:
+            self.bias = None
 
         self.input_spec = InputSpec(min_ndim=2, axes={-1: self.input_dim})
         self.built = True
@@ -56,64 +47,20 @@ class NoisyDense(Dense):
         print(inputs.get_shape().as_list() + [self.units])
         self.kernel_epsilon = K.random_normal(shape=(self.input_dim, self.units))
 
-        self.bias_epsilon = K.random_normal(shape=(self.units,))
-
         w = self.kernel + K.tf.multiply(self.kernel_sigma, self.kernel_epsilon)
         output = K.dot(inputs, w)
 
-        b = self.bias + K.tf.multiply(self.bias_sigma, self.bias_epsilon)
-        output = output + b
+        if self.use_bias:
+            self.bias_epsilon = K.random_normal(shape=(self.units,))
+
+            b = self.bias + K.tf.multiply(self.bias_sigma, self.bias_epsilon)
+            output = output + b
         if self.activation is not None:
             output = self.activation(output)
         return output
 
-    def compute_output_shape(self, input_shape):
-        assert input_shape and len(input_shape) >= 2
-        assert input_shape[-1]
-        output_shape = list(input_shape)
-        output_shape[-1] = self.units
-        return tuple(output_shape)
 
-
-class NoisyConv2D(_Conv):
-
-    def __init__(self,
-                 filters,
-                 kernel_size,
-                 strides=1,
-                 padding='valid',
-                 data_format=None,
-                 dilation_rate=1,
-                 activation=None,
-                 use_bias=True,
-                 kernel_initializer='glorot_uniform',
-                 bias_initializer='zeros',
-                 kernel_regularizer=None,
-                 bias_regularizer=None,
-                 activity_regularizer=None,
-                 kernel_constraint=None,
-                 bias_constraint=None,
-                 **kwargs):
-        super(_Conv, self).__init__(**kwargs)
-        self.rank = 2
-        self.filters = filters
-        self.kernel_size = conv_utils.normalize_tuple(kernel_size, self.rank,
-                                                      'kernel_size')
-        self.strides = conv_utils.normalize_tuple(strides, self.rank, 'strides')
-        self.padding = conv_utils.normalize_padding(padding)
-        self.data_format = K.normalize_data_format(data_format)
-        self.dilation_rate = conv_utils.normalize_tuple(dilation_rate, self.rank,
-                                                        'dilation_rate')
-        self.activation = activations.get(activation)
-        self.use_bias = use_bias
-        self.kernel_initializer = initializers.get(kernel_initializer)
-        self.bias_initializer = initializers.get(bias_initializer)
-        self.kernel_regularizer = regularizers.get(kernel_regularizer)
-        self.bias_regularizer = regularizers.get(bias_regularizer)
-        self.activity_regularizer = regularizers.get(activity_regularizer)
-        self.kernel_constraint = constraints.get(kernel_constraint)
-        self.bias_constraint = constraints.get(bias_constraint)
-        self.input_spec = InputSpec(ndim=self.rank + 2)
+class NoisyConv2D(Conv2D):
 
     def build(self, input_shape):
         if self.data_format == 'channels_first':
@@ -144,6 +91,12 @@ class NoisyConv2D(_Conv):
                                         name='bias',
                                         regularizer=self.bias_regularizer,
                                         constraint=self.bias_constraint)
+
+            self.bias_sigma = self.add_weight(shape=(self.filters,),
+                                        initializer=initializers.Constant(0.017),
+                                        name='bias_sigma',
+                                        regularizer=self.bias_regularizer,
+                                        constraint=self.bias_constraint)
         else:
             self.bias = None
         # Set input spec.
@@ -152,19 +105,28 @@ class NoisyConv2D(_Conv):
         self.built = True
 
     def call(self, inputs):
+        # add noise to kernel
 
+        self.kernel_epsilon = K.random_normal(shape=self.kernel_shape)
+
+        w = self.kernel + K.tf.multiply(self.kernel_sigma, self.kernel_epsilon)
+
+        # do conv op
         outputs = K.conv2d(
             inputs,
-            self.kernel,
+            w,
             strides=self.strides,
             padding=self.padding,
             data_format=self.data_format,
             dilation_rate=self.dilation_rate)
 
         if self.use_bias:
+            self.bias_epsilon = K.random_normal(shape=(self.filters,))
+
+            b = self.bias + K.tf.multiply(self.bias_sigma, self.bias_epsilon)
             outputs = K.bias_add(
                 outputs,
-                self.bias,
+                b,
                 data_format=self.data_format)
 
         if self.activation is not None:

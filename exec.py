@@ -3,7 +3,7 @@ from env import Sc2Env1Output, Sc2Env2Outputs, Sc2Env2OutputsFull
 from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3
 from sc2Processor import Sc2Processor, Sc2ProcessorFull
 from sc2Policy import Sc2Policy
-from noisyNetLayers import NoisyDense
+from noisyNetLayers import NoisyDense, NoisyConv2D
 from customCallbacks import GpuLogger
 import numpy
 import traceback
@@ -53,7 +53,7 @@ def fully_conf_q_agent_9():
 
         nb_actions = 3
         agent_name = "fullyConv_v8"
-        run_name = "02"
+        run_name = "03"
         dueling = False
         double = True
         action_repetition = 1
@@ -67,11 +67,15 @@ def fully_conf_q_agent_9():
         x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
         branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
 
-        coord_out = Conv2D(1, (1, 1), padding='same', activation='linear')(branch)
+        coord_out = NoisyConv2D(1, (1, 1), padding='same', activation='linear',
+                                kernel_initializer='lecun_uniform',
+                                bias_initializer='lecun_uniform')(branch)
 
         act_out = Flatten()(branch)
-        act_out = NoisyDense(256, activation='relu')(act_out)
-        act_out = NoisyDense(nb_actions, activation='linear')(act_out)
+        act_out = NoisyDense(256, activation='relu', kernel_initializer='lecun_uniform',
+                             bias_initializer='lecun_uniform')(act_out)
+        act_out = NoisyDense(nb_actions, activation='linear', kernel_initializer='lecun_uniform',
+                             bias_initializer='lecun_uniform')(act_out)
 
         full_conv_sc2 = Model(main_input, [act_out, coord_out])
 
@@ -98,7 +102,10 @@ def fully_conf_q_agent_9():
                              enable_double_dqn=double,
                              multi_step_size=3,
                              policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
-                             train_interval=train_interval, delta_clip=1., custom_model_objects={'NoisyDense':NoisyDense})
+                             train_interval=train_interval, delta_clip=1., custom_model_objects={
+                                'NoisyDense':NoisyDense,
+                                'NoisyConv2D': NoisyConv2D
+                            })
 
         dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
 
