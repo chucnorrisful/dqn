@@ -12,7 +12,7 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 - [x] Dueling DQN
 - [x] Prioritized experience replay
 - [x] Multi-step learning
-- [ ] Noisy nets
+- [x] Noisy nets
 - [ ] Distributional RL
 - [ ] Final [rainbow agent](https://arxiv.org/pdf/1710.02298.pdf)
 
