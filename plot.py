@@ -57,6 +57,7 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
 
     smooth = []
     zero_rate = []
+    sigmas = []
     # rew = rew[400:]
     # loss = loss[400:]
     for (i, re) in enumerate(rew):
@@ -70,6 +71,13 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
 
         mean = np.mean(rew[start:end])
         smooth.append(mean)
+
+        sigma = 0
+        for ree in rew[start:end]:
+            sigma += (ree-mean) ** 2
+
+        sigma = (sigma/len(rew[start:end])) ** 0.5
+        sigmas.append(sigma)
 
         zero = (len(rew[start:end]) - np.count_nonzero(rew[start:end])) * zero_scale / len(rew[start:end])
         zero_rate.append(zero)
@@ -95,12 +103,12 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
         if nb_steps[i-1] > nb_steps[i]:
             step_coll += nb_steps[i-1]
 
-    print(step_coll)
+    # print(step_coll)
 
     plt.plot(loss, 'g-', label='loss')
     plt.plot(rew, 'kx', label='reward')
     plt.plot(smooth, '-', color='orange', label='mean_reward')
-    plt.plot(zero_rate, 'r-', label='zero_rate')
+    plt.plot(sigmas, 'r-', label='sigma')
     if compare:
         plt.plot(cmp_smooth, '-', color='blue', label='reward_cmp')
     if hw_stats:
@@ -113,12 +121,19 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     plt.legend()
     plt.show()
 
+    max = np.argmax(rew)
+    max_mean = np.argmax(smooth)
+
+    print(rew[max])
+    print(smooth[max_mean])
+    print(sigmas[max_mean])
+
 
 # CMS "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
 #     "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"
 # MTB /home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v7/06/dqn_log.json
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v10/02/dqn_log.json"],
-           zero_scale=20, smoother=100, hw_stats=False,
-           compare=["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
-                    "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"])
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v10/01/dqn_log.json"],
+           zero_scale=20, smoother=100, hw_stats=False,)
+# compare=["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
+#         "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"])
