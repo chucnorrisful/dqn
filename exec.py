@@ -54,13 +54,13 @@ def fully_conf_q_agent_10():
         nb_actions = 3
 
         agent_name = "fullyConv_v10"
-        run_name = "01"
+        run_name = "02"
 
         dueling = True
         double = True
         prio_replay = True
-        noisy_nets = True
-        multi_step_size = 3
+        noisy_nets = False
+        multi_step_size = 1
 
         action_repetition = 1
         gamma = .99
@@ -77,7 +77,7 @@ def fully_conf_q_agent_10():
         if not noisy_nets:
             eps_start = 1.
             eps_end = .01
-            eps_steps = 400000
+            eps_steps = 100000
 
         # logging
 
@@ -159,8 +159,9 @@ def fully_conf_q_agent_10():
             memory = ReplayBuffer(memory_size)
 
         if noisy_nets:     # exploration is handled by noisy net
-            test_policy = Sc2Policy(env=env, eps=0.0)
-            policy = test_policy
+            test_policy = Sc2Policy(env=env, eps=0.005)
+            policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=0.,
+                                          value_test=.005, nb_steps=4000)
         else:
             policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
                                           value_test=.005, nb_steps=eps_steps)
@@ -170,7 +171,7 @@ def fully_conf_q_agent_10():
 
         dqn = Sc2DqnAgent_v4(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
                              enable_dueling_network=dueling, memory=memory, processor=processor,
-                             nb_steps_warmup=warm_up_steps,
+                             nb_steps_warm_up=warm_up_steps,
                              enable_double_dqn=double,
                              prio_replay=prio_replay,
                              prio_replay_beta=prio_replay_beta,

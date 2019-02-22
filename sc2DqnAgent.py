@@ -33,7 +33,7 @@ class AbstractSc2DQNAgent4(Agent3):
     """Write me
     """
 
-    def __init__(self, nb_actions, screen_size, memory, gamma=.99, batch_size=32, nb_steps_warmup=1000,
+    def __init__(self, nb_actions, screen_size, memory, gamma=.99, batch_size=32, nb_steps_warm_up=1000,
                  train_interval=1, memory_interval=1, target_model_update=10000,
                  delta_range=None, delta_clip=np.inf, custom_model_objects={}, **kwargs):
         super(AbstractSc2DQNAgent4, self).__init__(**kwargs)
@@ -50,8 +50,8 @@ class AbstractSc2DQNAgent4(Agent3):
 
         if delta_range is not None:
             warnings.warn(
-                '`delta_range` is deprecated. Please use `delta_clip` instead, which takes a single scalar. For now we\'re falling back to `delta_range[1] = {}`'.format(
-                    delta_range[1]))
+                '`delta_range` is deprecated. Please use `delta_clip` instead, which takes a single scalar. '
+                'For now we\'re falling back to `delta_range[1] = {}`'.format(delta_range[1]))
             delta_clip = delta_range[1]
 
         # Parameters.
@@ -59,7 +59,7 @@ class AbstractSc2DQNAgent4(Agent3):
         self.screen_size = screen_size
         self.gamma = gamma
         self.batch_size = batch_size
-        self.nb_steps_warmup = nb_steps_warmup
+        self.nb_steps_warm_up = nb_steps_warm_up
         self.train_interval = train_interval
         self.memory_interval = memory_interval
         self.target_model_update = target_model_update
@@ -96,7 +96,7 @@ class AbstractSc2DQNAgent4(Agent3):
             'screen_size': self.screen_size,
             'gamma': self.gamma,
             'batch_size': self.batch_size,
-            'nb_steps_warmup': self.nb_steps_warmup,
+            'nb_steps_warmup': self.nb_steps_warm_up,
             'train_interval': self.train_interval,
             'memory_interval': self.memory_interval,
             'target_model_update': self.target_model_update,
@@ -122,7 +122,8 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent4):
     """
 
     def __init__(self, model, policy=None, test_policy=None, enable_double_dqn=False, enable_dueling_network=False,
-                 dueling_type='avg', noisy_nets=True, prio_replay=True, prio_replay_beta=(0.5, 1.0, 200000), multi_step_size=3, *args, **kwargs):
+                 dueling_type='avg', noisy_nets=True, prio_replay=True, prio_replay_beta=(0.5, 1.0, 200000),
+                 multi_step_size=3, *args, **kwargs):
         super(Sc2DqnAgent_v4, self).__init__(*args, **kwargs)
 
         # Validate (important) input.
@@ -379,7 +380,7 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent4):
             return metrics
 
         # Train the network on a single stochastic batch.
-        if self.step > self.nb_steps_warmup and self.step % self.train_interval == 0:
+        if self.step > self.nb_steps_warm_up and self.step % self.train_interval == 0:
             if self.prio_replay:
                 experiences = self.memory.sample(self.batch_size, self.beta_schedule.value(self.step))
             else:
@@ -473,8 +474,8 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent4):
 
             # Compute r_t + gamma * r_t+1 + gamma² * max_a Q(s_t+2, a) and update the target targets accordingly,
             # but only for the affected output units (as given by action_batch).
-            discounted_reward_batch_a = (self.gamma ** 2) * q_batch_a
-            discounted_reward_batch_b = (self.gamma ** 2) * q_batch_b
+            discounted_reward_batch_a = (self.gamma ** self.multi_step_size) * q_batch_a
+            discounted_reward_batch_b = (self.gamma ** self.multi_step_size) * q_batch_b
 
             # Set discounted reward to zero for all states that were terminal.
             discounted_reward_batch_a = discounted_reward_batch_a * terminal2_batch[:]
