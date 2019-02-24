@@ -1,8 +1,8 @@
 from absl import app
 from env import Sc2Env1Output, Sc2Env2Outputs, Sc2Env2OutputsFull
-from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3, Sc2DqnAgent_v4
+from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3, Sc2DqnAgent_v4, Sc2DqnAgent_v5
 from sc2Processor import Sc2Processor, Sc2ProcessorFull
-from sc2Policy import Sc2Policy
+from sc2Policy import Sc2Policy, Sc2PolicyD
 from noisyNetLayers import NoisyDense, NoisyConv2D
 from customCallbacks import GpuLogger
 import numpy
@@ -31,7 +31,7 @@ from rl.memory import SequentialMemory
 from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
-_ENV_NAME = "CollectMineralShards"
+_ENV_NAME = "MoveToBeacon"
 _SCREEN = 32
 _MINIMAP = 16
 
@@ -40,7 +40,193 @@ _TEST = False
 
 
 def __main__(unused_argv):
-    fully_conf_q_agent_10()
+    fully_conf_q_agent_11()
+
+
+# distributed rl attempt
+def fully_conf_q_agent_11():
+    try:
+        seed = 3453
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(seed)
+        numpy.random.seed(seed)
+
+        # hyper
+
+        nb_actions = 3
+
+        agent_name = "fullyConv_v11"
+        run_name = "03"
+
+        dueling = False
+        double = False
+        prio_replay = False
+        noisy_nets = False
+        multi_step_size = 1
+        distributed = True
+        nb_atoms = 10
+        z = numpy.arange(0, 10, 10/nb_atoms)
+
+        action_repetition = 3
+        gamma = .99
+        memory_size = 200000
+        learning_rate = .0001
+        warm_up_steps = 4000
+        train_interval = 4
+
+
+        prio_replay_alpha = 0.6
+        prio_replay_beta = (0.5, 1.0, 200000)
+
+        # policy params epsilon greedy
+        if not noisy_nets:
+            eps_start = 1.
+            eps_end = .01
+            eps_steps = 400000
+        else:
+            eps_start = 1.
+            eps_end = 0
+            eps_steps = 4000
+
+        # logging
+
+        directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        weights_filename = directory + '/dqn_weights.h5f'
+        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
+        log_filename = directory + '/dqn_log.json'
+        log_filename_gpu = directory + '/dqn_log_gpu.json'
+        log_interval = 8000
+
+        agent_hyper_params = {
+            "SEED": seed,
+            "NB_ACTIONS": nb_actions,
+
+            "DUELING": dueling,
+            "DOUBLE": double,
+            "PRIO_REPLAY": prio_replay,
+            "NOISY_NETS": noisy_nets,
+            "MULTI_STEP_SIZE": multi_step_size,
+
+            "ACTION_REPETITION": action_repetition,
+            "GAMMA": gamma,
+            "MEMORY_SIZE": memory_size,
+            "LEARNING_RATE": learning_rate,
+            "WARM_UP_STEPS": warm_up_steps,
+            "TRAIN_INTERVAL": train_interval,
+
+            "LOG_INTERVAL": log_interval,
+        }
+
+        if prio_replay:
+            agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
+            agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
+
+        if not noisy_nets:
+            agent_hyper_params["EPS_START"] = eps_start
+            agent_hyper_params["EPS_END"] = eps_end
+            agent_hyper_params["EPS_STEPS"] = eps_steps
+
+        # build network
+
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        nb_conv_out = 1
+        activation = "linear"
+        if distributed:
+            nb_conv_out = nb_atoms
+            activation = "softmax"
+
+        if noisy_nets:
+            coord_out = NoisyConv2D(nb_conv_out, (1, 1), padding='same', activation=activation,
+                                    kernel_initializer='lecun_uniform',
+                                    bias_initializer='lecun_uniform')(branch)
+        else:
+            coord_out = Conv2D(nb_conv_out, (1, 1), padding='same', activation=activation)(branch)
+
+        act_out = Flatten()(branch)
+
+        nb_lin_out = nb_actions
+        if distributed:
+            nb_lin_out = nb_actions * nb_atoms
+
+        if noisy_nets:
+            act_out = NoisyDense(256, activation='relu', kernel_initializer='lecun_uniform',
+                                 bias_initializer='lecun_uniform')(act_out)
+            act_out = NoisyDense(nb_lin_out, activation=activation, kernel_initializer='lecun_uniform',
+                                 bias_initializer='lecun_uniform')(act_out)
+        else:
+            act_out = Dense(256, activation='relu')(act_out)
+            act_out = Dense(nb_lin_out, activation=activation)(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        save_hyper_parameters(full_conv_sc2, env, directory, agent_hyper_params)
+
+        print(act_out.shape)
+        print(coord_out.shape)
+
+        if prio_replay:
+            memory = PrioritizedReplayBuffer(memory_size, prio_replay_alpha)
+        else:
+            memory = ReplayBuffer(memory_size)
+
+        if distributed:
+            test_policy = Sc2PolicyD(env, nb_actions, z, eps=eps_end)
+            policy = LinearAnnealedPolicy(Sc2PolicyD(env, nb_actions, z), attr='eps', value_max=eps_start, value_min=eps_end,
+                                          value_test=eps_end, nb_steps=eps_steps)
+        else:
+            policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                          value_test=eps_end, nb_steps=eps_steps)
+            test_policy = Sc2Policy(env=env, eps=eps_end)
+
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        dqn = Sc2DqnAgent_v5(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
+                             enable_dueling_network=dueling, memory=memory, processor=processor,
+                             nb_steps_warmup=warm_up_steps,
+                             enable_double_dqn=double,
+                             prio_replay=prio_replay,
+                             prio_replay_beta=prio_replay_beta,
+                             multi_step_size=multi_step_size,
+                             distributed=distributed,
+                             z=z,
+                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
+                             train_interval=train_interval, delta_clip=1., custom_model_objects={
+                                'NoisyDense': NoisyDense,
+                                'NoisyConv2D': NoisyConv2D})
+
+        dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
+
+        if _TEST:
+            dqn.load_weights(
+                '/home/benjamin/PycharmProjects/dqn/weights/'
+                'CollectMineralShards/fullyConv_v7/08/dqn_weights_6800000.h5f')
+            dqn.test(env, nb_episodes=20, visualize=True)
+        else:
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
+            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+                    action_repetition=action_repetition)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+    except KeyboardInterrupt:
+        exit(0)
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
 
 
 # uniform everything but distributed rl
@@ -53,12 +239,12 @@ def fully_conf_q_agent_10():
 
         nb_actions = 3
 
-        agent_name = "fullyConv_v10"
+        agent_name = "only_dueling_v10"
         run_name = "02"
 
         dueling = True
-        double = True
-        prio_replay = True
+        double = False
+        prio_replay = False
         noisy_nets = False
         multi_step_size = 1
 
@@ -69,9 +255,8 @@ def fully_conf_q_agent_10():
         warm_up_steps = 4000
         train_interval = 4
 
-        if prio_replay:
-            prio_replay_alpha = 0.6
-            prio_replay_beta = (0.5, 1.0, 200000)
+        prio_replay_alpha = 0.6
+        prio_replay_beta = (0.5, 1.0, 200000)
 
         # policy params epsilon greedy
         if not noisy_nets:
@@ -171,7 +356,7 @@ def fully_conf_q_agent_10():
 
         dqn = Sc2DqnAgent_v4(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
                              enable_dueling_network=dueling, memory=memory, processor=processor,
-                             nb_steps_warm_up=warm_up_steps,
+                             nb_steps_warmup=warm_up_steps,
                              enable_double_dqn=double,
                              prio_replay=prio_replay,
                              prio_replay_beta=prio_replay_beta,
@@ -193,7 +378,7 @@ def fully_conf_q_agent_10():
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
             callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
-            dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+            dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
                     action_repetition=action_repetition)
 
             dqn.save_weights(weights_filename, overwrite=True)

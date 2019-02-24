@@ -105,10 +105,10 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
 
     # print(step_coll)
 
-    plt.plot(loss, 'g-', label='loss')
+    plt.plot(np.array(loss) / 20, 'g-', label='loss')
     plt.plot(rew, 'kx', label='reward')
     plt.plot(smooth, '-', color='orange', label='mean_reward')
-    plt.plot(sigmas, 'r-', label='sigma')
+    plt.plot(zero_rate, 'r-', label='sigma')
     if compare:
         plt.plot(cmp_smooth, '-', color='blue', label='reward_cmp')
     if hw_stats:
@@ -133,7 +133,7 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
 #     "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"
 # MTB /home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v7/06/dqn_log.json
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v10/01/dqn_log.json"],
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v11/03/dqn_log.json"],
            zero_scale=20, smoother=100, hw_stats=False,)
 # compare=["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
 #         "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"])
