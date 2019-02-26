@@ -236,7 +236,7 @@ def fully_conf_q_agent_11():
 
 
 # uniform everything but distributed rl
-def fully_conf_q_agent_10(a_name, a_dir):
+def fully_conf_q_agent_10(a_dir):
     try:
         seed = 345753
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
