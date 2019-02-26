@@ -11,7 +11,7 @@ import os
 import json
 from prioReplayBuffer import PrioritizedReplayBuffer, ReplayBuffer
 from baselines.common.schedules import LinearSchedule
-
+import random
 from pysc2.env import sc2_env
 from pysc2.lib import features
 
@@ -238,7 +238,7 @@ def fully_conf_q_agent_11():
 # uniform everything but distributed rl
 def fully_conf_q_agent_10(a_dir):
     try:
-        seed = 345753
+        seed = random.randint(1, 324234)
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
         env.seed(seed)
         numpy.random.seed(seed)
