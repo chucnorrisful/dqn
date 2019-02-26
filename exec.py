@@ -48,7 +48,7 @@ def extensive_testing():
 
     for i in range(3):
         results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
-        fully_conf_q_agent_10(name, results_dir)
+        fully_conf_q_agent_10(results_dir)
 
 
 # distributed rl attempt
