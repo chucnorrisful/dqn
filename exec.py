@@ -40,7 +40,15 @@ _TEST = False
 
 
 def __main__(unused_argv):
-    fully_conf_q_agent_11()
+    extensive_testing()
+
+
+def extensive_testing():
+    name = "plsChange"
+
+    for i in range(3):
+        results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
+        fully_conf_q_agent_10(name, results_dir)
 
 
 # distributed rl attempt
@@ -121,14 +129,12 @@ def fully_conf_q_agent_11():
             "LOG_INTERVAL": log_interval,
         }
 
-        if prio_replay:
-            agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
-            agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
+        agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
+        agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
 
-        if not noisy_nets:
-            agent_hyper_params["EPS_START"] = eps_start
-            agent_hyper_params["EPS_END"] = eps_end
-            agent_hyper_params["EPS_STEPS"] = eps_steps
+        agent_hyper_params["EPS_START"] = eps_start
+        agent_hyper_params["EPS_END"] = eps_end
+        agent_hyper_params["EPS_STEPS"] = eps_steps
 
         # build network
 
@@ -230,7 +236,7 @@ def fully_conf_q_agent_11():
 
 
 # uniform everything but distributed rl
-def fully_conf_q_agent_10():
+def fully_conf_q_agent_10(a_name, a_dir):
     try:
         seed = 345753
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
@@ -239,14 +245,14 @@ def fully_conf_q_agent_10():
 
         nb_actions = 3
 
-        agent_name = "only_dueling_v10"
-        run_name = "02"
+        # agent_name = "fake_rainbow_baseline_v10"
+        # run_name = "01"
 
         dueling = True
-        double = False
-        prio_replay = False
-        noisy_nets = False
-        multi_step_size = 1
+        double = True
+        prio_replay = True
+        noisy_nets = True
+        multi_step_size = 3
 
         action_repetition = 1
         gamma = .99
@@ -263,10 +269,15 @@ def fully_conf_q_agent_10():
             eps_start = 1.
             eps_end = .01
             eps_steps = 100000
+        else:
+            eps_start = 1.
+            eps_end = 0
+            eps_steps = 4000
 
         # logging
 
-        directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
+        directory = a_dir
+        # directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
 
         if not os.path.exists(directory):
             os.makedirs(directory)
@@ -297,14 +308,12 @@ def fully_conf_q_agent_10():
             "LOG_INTERVAL": log_interval,
         }
 
-        if prio_replay:
-            agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
-            agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
+        agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
+        agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
 
-        if not noisy_nets:
-            agent_hyper_params["EPS_START"] = eps_start
-            agent_hyper_params["EPS_END"] = eps_end
-            agent_hyper_params["EPS_STEPS"] = eps_steps
+        agent_hyper_params["EPS_START"] = eps_start
+        agent_hyper_params["EPS_END"] = eps_end
+        agent_hyper_params["EPS_STEPS"] = eps_steps
 
         # build network
 
@@ -343,14 +352,9 @@ def fully_conf_q_agent_10():
         else:
             memory = ReplayBuffer(memory_size)
 
-        if noisy_nets:     # exploration is handled by noisy net
-            test_policy = Sc2Policy(env=env, eps=0.005)
-            policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=1., value_min=0.,
-                                          value_test=.005, nb_steps=4000)
-        else:
-            policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
-                                          value_test=.005, nb_steps=eps_steps)
-            test_policy = Sc2Policy(env=env, eps=0.005)
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                      value_test=eps_end, nb_steps=eps_steps)
+        test_policy = Sc2Policy(env=env, eps=eps_end)
 
         processor = Sc2Processor(screen=env._SCREEN)
 
