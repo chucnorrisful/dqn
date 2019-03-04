@@ -19,7 +19,7 @@ from pysc2.agents.scripted_agent import MoveToBeacon
 from pysc2.agents.random_agent import RandomAgent
 
 import keras.layers
-
+import keras.backend as K
 from keras.models import Sequential, Model
 from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D, MaxPooling2D, Lambda
 
@@ -31,7 +31,7 @@ from rl.memory import SequentialMemory
 from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
-_ENV_NAME = "MoveToBeacon"
+_ENV_NAME = "CollectMineralShards"
 _SCREEN = 32
 _MINIMAP = 16
 
@@ -44,11 +44,12 @@ def __main__(unused_argv):
 
 
 def extensive_testing():
-    name = "plsChange"
+    name = "fake_rainbow_prio_fix_v10"
 
-    for i in range(3):
+    for i in range(1, 6):
         results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
         fully_conf_q_agent_10(results_dir)
+        K.clear_session()
 
 
 # distributed rl attempt

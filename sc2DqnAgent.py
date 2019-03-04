@@ -25,13 +25,39 @@ def mean_q_d(y_true, y_pred):
     return K.mean(mean_a, mean_b)
 
 
+def huber_loss_simple(y_true, y_pred, clip_value):
+    # Huber loss, see https://en.wikipedia.org/wiki/Huber_loss and
+    # https://medium.com/@karpathy/yes-you-should-understand-backprop-e2f06eab496b
+    # for details.
+    # non-Tensor version of keras-rl utils version "huber_loss"
+    assert clip_value > 0.
+    assert y_true.shape == y_pred.shape
+
+    if len(y_true.shape) == 1:
+        y_true = np.reshape(y_true, y_true.shape + (1,))
+        y_pred = np.reshape(y_pred, y_pred.shape + (1,))
+
+    out = np.zeros(y_true.shape)
+    for i in range(y_true.shape[0]):
+        for j in range(y_true.shape[1]):
+            x = y_true[i][j] - y_pred[i][j]
+            if np.abs(x) < clip_value:
+                out[i][j] = .5 * np.square(x)
+            else:
+                out[i][j] = clip_value * (np.abs(x) - .5 * clip_value)
+
+    if len(out.shape) == 2:
+        out = np.reshape(out, (len(out),))
+
+    return out
+
+
 class Sc2Action:
 
     # default: noop
     def __init__(self, act=0, x=0, y=0):
         self.coords = (x, y)
         self.action = act
-
 
 
 class AbstractSc2DQNAgent(Agent):
@@ -960,14 +986,13 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             sum_loss_b = K.sum(loss[1])
             return K.sum([sum_loss_a, sum_loss_b], axis=-1)
 
-        def clipped_masked_error_v2(args):
+        def clipped_masked_error2(args):
             y_true_a, y_true_b, y_pred_a, y_pred_b, mask_a, mask_b = args
             loss = [huber_loss(y_true_a, y_pred_a, self.delta_clip),
                     huber_loss(y_true_b, y_pred_b, self.delta_clip)]
             loss[0] *= mask_a  # apply element-wise mask
             loss[1] *= mask_b  # apply element-wise mask
             sum_loss_a = K.sum(loss[0])
-            sum_loss_a = sum_loss_a * 0
             sum_loss_b = K.sum(loss[1])
             return K.sum([sum_loss_a, sum_loss_b], axis=-1)
 
@@ -1168,16 +1193,16 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             # reward_batch already contains r_t + gamma * r_t+1
             Rs_a = reward_batch[:] + discounted_reward_batch_a
             Rs_b = reward_batch[:] + discounted_reward_batch_b
-            for idx, (target_a, target_b, mask_a, mask_b, R_a, R_b, action) in \
-                    enumerate(zip(targets_a, targets_b, masks_a, masks_b, Rs_a, Rs_b, action_batch)):
+            for idx, (target_a, target_b, mask_a, mask_b, R_a, R_b, action, prio_weight) in \
+                    enumerate(zip(targets_a, targets_b, masks_a, masks_b, Rs_a, Rs_b, action_batch, prio_weights_batch)):
                 target_a[action.action] = R_a  # update action with estimated accumulated reward
                 if len(action.coords) != 2:
                     print(action.coords)
                 target_b[action.coords] = R_b  # update action with estimated accumulated reward
                 dummy_targets_a[idx] = R_a
                 dummy_targets_b[idx] = R_b
-                mask_a[action.action] = 1.  # enable loss for this specific action
-                mask_b[action.coords] = 1.  # enable loss for this specific action
+                mask_a[action.action] = prio_weight  # enable loss for this specific action
+                mask_b[action.coords] = prio_weight  # enable loss for this specific action
             targets_a = np.array(targets_a).astype('float32')
             targets_b = np.array(targets_b).astype('float32')
             masks_a = np.array(masks_a).astype('float32')
@@ -1199,11 +1224,20 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             # update priority batch
             if self.prio_replay:
                 prios = []
-                for pre in zip(pred[1], pred[2]):
-                    loss = [target_a - pre[0],
-                            target_b - pre[1]]
-                    loss[0] *= mask_a  # apply element-wise mask
-                    loss[1] *= mask_b  # apply element-wise mask
+                # for pre in zip(pred[1], pred[2], targets_a, targets_b):
+                #     loss = [target_a - pre[0],
+                #             target_b - pre[1]]
+                #     loss[0] *= mask_a  # apply element-wise mask
+                #     loss[1] *= mask_b  # apply element-wise mask
+                #     sum_loss_a = np.sum(loss[0])
+                #     sum_loss_b = np.sum(loss[1])
+                #     prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
+
+                for pre in zip(pred[1], pred[2], targets_a, targets_b, masks_a, masks_b):
+                    loss = [pre[0] - pre[2],
+                            pre[1] - pre[3]]
+                    loss[0] *= pre[4]  # apply element-wise mask
+                    loss[1] *= pre[5]  # apply element-wise mask
                     sum_loss_a = np.sum(loss[0])
                     sum_loss_b = np.sum(loss[1])
                     prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))

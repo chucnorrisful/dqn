@@ -4,6 +4,7 @@ from keras.layers.convolutional import _Conv, Conv2D
 from keras.engine.base_layer import InputSpec
 from keras import initializers
 
+
 class NoisyDense(Dense):
     def __init__(self, units, **kwargs):
         self.output_dim = units
