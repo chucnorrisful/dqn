@@ -44,9 +44,9 @@ def __main__(unused_argv):
 
 
 def extensive_testing():
-    name = "fake_rainbow_prio_fix_v10"
+    name = "fake_rainbow_weights_v10"
 
-    for i in range(1, 6):
+    for i in range(1, 2):
         results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
         fully_conf_q_agent_10(results_dir)
         K.clear_session()

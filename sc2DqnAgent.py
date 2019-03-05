@@ -1224,23 +1224,23 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             # update priority batch
             if self.prio_replay:
                 prios = []
-                # for pre in zip(pred[1], pred[2], targets_a, targets_b):
-                #     loss = [target_a - pre[0],
-                #             target_b - pre[1]]
-                #     loss[0] *= mask_a  # apply element-wise mask
-                #     loss[1] *= mask_b  # apply element-wise mask
-                #     sum_loss_a = np.sum(loss[0])
-                #     sum_loss_b = np.sum(loss[1])
-                #     prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
-
-                for pre in zip(pred[1], pred[2], targets_a, targets_b, masks_a, masks_b):
-                    loss = [pre[0] - pre[2],
-                            pre[1] - pre[3]]
-                    loss[0] *= pre[4]  # apply element-wise mask
-                    loss[1] *= pre[5]  # apply element-wise mask
+                for pre in zip(pred[1], pred[2], targets_a, targets_b):
+                    loss = [target_a - pre[0],
+                            target_b - pre[1]]
+                    loss[0] *= mask_a  # apply element-wise mask
+                    loss[1] *= mask_b  # apply element-wise mask
                     sum_loss_a = np.sum(loss[0])
                     sum_loss_b = np.sum(loss[1])
                     prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
+
+                # for pre in zip(pred[1], pred[2], targets_a, targets_b, masks_a, masks_b):
+                #     loss = [pre[0] - pre[2],
+                #             pre[1] - pre[3]]
+                #     loss[0] *= pre[4]  # apply element-wise mask
+                #     loss[1] *= pre[5]  # apply element-wise mask
+                #     sum_loss_a = np.sum(loss[0])
+                #     sum_loss_b = np.sum(loss[1])
+                #     prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
 
                 self.memory.update_priorities(id_batch, prios)
 
