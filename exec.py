@@ -1,58 +1,262 @@
-from absl import app
-from env import Sc2Env1Output, Sc2Env2Outputs, Sc2Env2OutputsFull
-from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3, Sc2DqnAgent_v4, Sc2DqnAgent_v5
-from sc2Processor import Sc2Processor, Sc2ProcessorFull
-from sc2Policy import Sc2Policy, Sc2PolicyD
-from noisyNetLayers import NoisyDense, NoisyConv2D
-from customCallbacks import GpuLogger
 import numpy
 import traceback
 import os
 import json
-from prioReplayBuffer import PrioritizedReplayBuffer, ReplayBuffer
-from baselines.common.schedules import LinearSchedule
 import random
+from absl import app
+
+# own classes
+from env import Sc2Env1Output, Sc2Env2Outputs
+from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3, Sc2DqnAgent_v4, Sc2DqnAgent_v5
+from sc2Processor import Sc2Processor
+from sc2Policy import Sc2Policy, Sc2PolicyD
+from noisyNetLayers import NoisyDense, NoisyConv2D
+from customCallbacks import GpuLogger
+from plot import test_plot
+from prioReplayBuffer import PrioritizedReplayBuffer, ReplayBuffer
+
+# framework classes
 from pysc2.env import sc2_env
-from pysc2.lib import features
-
 from pysc2.agents.scripted_agent import MoveToBeacon
-from pysc2.agents.random_agent import RandomAgent
 
-import keras.layers
 import keras.backend as K
 from keras.models import Sequential, Model
-from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D, MaxPooling2D, Lambda
-
+from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute, Input, Conv2D
 from keras.optimizers import Adam
 
 from rl.agents.dqn import DQNAgent
-from rl.policy import LinearAnnealedPolicy, BoltzmannQPolicy, EpsGreedyQPolicy
+from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.memory import SequentialMemory
-from rl.core import Processor
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
+# Hier Map auswählen und Map/MiniMap Auflösung wählen.
 _ENV_NAME = "CollectMineralShards"
 _SCREEN = 32
 _MINIMAP = 16
 
+# Auf Windows muss _VISUALIZE immer False sein.
+# _TEST = True evaluiert den Agent mit im "if _TEST:" bereich definierten Gewichten -> dort diese ggf. ändern!
+# _TEST = False trainiert den Agent mit im Agent gesetzten Hyperparametern.
 _VISUALIZE = False
 _TEST = False
 
 
+# Verzeichnis und Agent wählen. Entry-Point des Programms.
 def __main__(unused_argv):
-    extensive_testing()
+    agent_name = "testRun_v10"
+    run_number = 1
+    results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
+
+    # choose Agent:
+    fully_conf_v_10(results_dir)
 
 
+# Für ununterbrochenes Testen über mehrere Tage/Testläufe hinweg.
 def extensive_testing():
-    name = "fake_rainbow_weights_v10"
+    name = "fake_rainbow_v10"
 
-    for i in range(1, 2):
+    for i in range(3, 4):
         results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
-        fully_conf_q_agent_10(results_dir)
+        fully_conf_v_10(results_dir)
         K.clear_session()
 
 
-# distributed rl attempt
+# Es folgt eine Reihe von Implementierungen verschiedener Agents (älteste am Ende der Datei), welche inkrementell
+# verbessert wurden. Um Variationen der Algorithmen zu testen, genügt allerdings der FullyConv_V10 Agent alleine,
+# da sich alle Rainbow-Erweiterungen ein- und ausschalten lassen. Ältere Agents sind kaum dokumentiert, da sie nur
+# aus historischen Gründen noch nicht gelöscht wurden.
+
+
+# FullyConv_V10, zusammen mit Sc2DqnAgent_v4 als Agent => FINAL AGENT SO FAR
+# Alles außer Distributional RL [dafür experimentellen V11 Agent, lernt aktuell nicht].
+def fully_conf_v_10(a_dir):
+    try:
+        # Setzen eines zufälligen Seeds, welcher gespeichert wird.
+        # Initialisieren der Adapterklasse Sc2Env2Outputs, welche StarCraft2 intern verwaltet
+        # und Observations/Actions aufbereitet.
+        seed = random.randint(1, 324234)
+        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
+        env.seed(seed)
+        numpy.random.seed(seed)
+
+        # Definieren der Anzahl der verschiedenen Optionen (hier NO_OP, MOVE_SCREEN und SELECT_POINT(toggle).
+        # Diese müssen in env.action_to_sc2() definiert sein!
+        nb_actions = 3
+
+        # Setzen der HYPERPARAMETER!
+        # Ein- und Ausschalten der Rainbow-DQN Erweiterungen.
+        # multi_step_size = 1 entspricht ausgeschaltetem Multi-Step DQN.
+        dueling = True
+        double = True
+        prio_replay = True
+        noisy_nets = False
+        multi_step_size = 3
+
+        # weitere HyperParameter
+        action_repetition = 1
+        gamma = .99
+        memory_size = 200000
+        learning_rate = .0001
+        warm_up_steps = 4000
+        train_interval = 4
+
+        # Einstellungen für das Prioritized Experience Replay
+        prio_replay_alpha = 0.6
+        prio_replay_beta = (0.5, 1.0, 200000)
+
+        # Parameter für die Epsilon-Greedy Policy
+        if not noisy_nets:
+            eps_start = 1.
+            eps_end = .01
+            eps_steps = 100000
+        else:
+            eps_start = 1.
+            eps_end = 0
+            eps_steps = 4000
+
+        # Logging aller HyperParameter, sowie Festlegen des Pfads für wärend des Lernprozesses generierte Logs etc.
+        directory = a_dir
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        weights_filename = directory + '/dqn_weights.h5f'
+        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
+        log_filename = directory + '/dqn_log.json'
+        log_filename_gpu = directory + '/dqn_log_gpu.json'
+        log_interval = 8000
+
+        agent_hyper_params = {
+            "SEED": seed,
+            "NB_ACTIONS": nb_actions,
+
+            "DUELING": dueling,
+            "DOUBLE": double,
+            "PRIO_REPLAY": prio_replay,
+            "NOISY_NETS": noisy_nets,
+            "MULTI_STEP_SIZE": multi_step_size,
+
+            "ACTION_REPETITION": action_repetition,
+            "GAMMA": gamma,
+            "MEMORY_SIZE": memory_size,
+            "LEARNING_RATE": learning_rate,
+            "WARM_UP_STEPS": warm_up_steps,
+            "TRAIN_INTERVAL": train_interval,
+
+            "LOG_INTERVAL": log_interval,
+        }
+
+        agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
+        agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
+
+        agent_hyper_params["EPS_START"] = eps_start
+        agent_hyper_params["EPS_END"] = eps_end
+        agent_hyper_params["EPS_STEPS"] = eps_steps
+
+        # Definition des neuralen Netzwerks!
+        # Input und Output Dimensionen müssen eingehalten werden!
+        # Falls die Anzahl der Layers sich verändert, muss in der init() des Sc2DqnAgent_v4 im Bereich "if dueling:"
+        # sichergestellt werden, dass die Korrekten Ebenen durch die Dueling-Architektur ersetzt werden.
+
+        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
+        permuted_input = Permute((2, 3, 1))(main_input)
+        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
+        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
+
+        if noisy_nets:
+            coord_out = NoisyConv2D(1, (1, 1), padding='same', activation='linear',
+                                    kernel_initializer='lecun_uniform',
+                                    bias_initializer='lecun_uniform')(branch)
+        else:
+            coord_out = Conv2D(1, (1, 1), padding='same', activation='linear')(branch)
+
+        act_out = Flatten()(branch)
+
+        if noisy_nets:
+            act_out = NoisyDense(256, activation='relu', kernel_initializer='lecun_uniform',
+                                 bias_initializer='lecun_uniform')(act_out)
+            act_out = NoisyDense(nb_actions, activation='linear', kernel_initializer='lecun_uniform',
+                                 bias_initializer='lecun_uniform')(act_out)
+        else:
+            act_out = Dense(256, activation='relu')(act_out)
+            act_out = Dense(nb_actions, activation='linear')(act_out)
+
+        full_conv_sc2 = Model(main_input, [act_out, coord_out])
+
+        # Speichern aller HyperParameter und der Netzwerkstruktur.
+        save_hyper_parameters(full_conv_sc2, env, directory, agent_hyper_params)
+
+        # Erzeugung des Experience Replay Memorys (modifizierte Version der OpenAI/baselines Klasse gleichen Namens).
+        if prio_replay:
+            memory = PrioritizedReplayBuffer(memory_size, prio_replay_alpha)
+        else:
+            memory = ReplayBuffer(memory_size)
+
+        # Erzeugung einer Policy aus gegebenen Parametern, Sc2Policy verarbeitet beide Outputs des Netzwerks.
+        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
+                                      value_test=eps_end, nb_steps=eps_steps)
+        test_policy = Sc2Policy(env=env, eps=eps_end)
+
+        # Erzeugen eines Prozessors - dieser prüft nur die Dimension des Inputs (Observation) und macht sonst nichts.
+        processor = Sc2Processor(screen=env._SCREEN)
+
+        # Erzeugung des eigentlichen Agents.
+        # Dieser enthält die Implementierung des Lernalgorithmus.
+        dqn = Sc2DqnAgent_v4(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
+                             enable_dueling_network=dueling, memory=memory, processor=processor,
+                             nb_steps_warmup=warm_up_steps,
+                             enable_double_dqn=double,
+                             prio_replay=prio_replay,
+                             prio_replay_beta=prio_replay_beta,
+                             multi_step_size=multi_step_size,
+                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
+                             train_interval=train_interval, delta_clip=1., custom_model_objects={
+                                'NoisyDense': NoisyDense,
+                                'NoisyConv2D': NoisyConv2D})
+
+        dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
+
+        if _TEST:
+            h = []
+            for i in range(1, 2):
+                # Hier die entsprechenden Gewichte laden, um einen Testlauf durchzuführen.
+                # Die Schleife kann benutzt werden, um eine Serie von Testläufen zusammen auszuführen.
+                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fake_rainbow_v10/3/dqn_weights_3000000.h5f')
+
+                # Anzahl der Testläufe festlegen
+                history = dqn.test(env, nb_episodes=100, visualize=_VISUALIZE)
+                h.append(history.history['episode_reward'])
+
+            for his in h:
+                # Schreibt Durchschnitt, Maximalwert und Standardabweichung in die Kommandozeile.
+                test_plot(his)
+
+        else:
+
+            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
+            callbacks += [FileLogger(log_filename, interval=100)]
+            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
+
+            # Festlegen der Anzahl an Schritten bis zum Ende des Lernprozesses.
+            # Startet den Lernprozess!
+            dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
+                    action_repetition=action_repetition)
+
+            dqn.save_weights(weights_filename, overwrite=True)
+
+    except KeyboardInterrupt:
+        exit(0)
+        pass
+
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
+        pass
+
+
+# Distributional RL - lernt noch nicht, läuft aber.
+# Für interne Funktionsweise siehe fully_conf_v_10().
+# Alle Erweiterungen müssen deaktiviert sein, da noch nicht implementiert.
 def fully_conf_q_agent_11():
     try:
         seed = 3453
@@ -222,168 +426,6 @@ def fully_conf_q_agent_11():
             callbacks += [FileLogger(log_filename, interval=100)]
             callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
             dqn.fit(env, nb_steps=10000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
-                    action_repetition=action_repetition)
-
-            dqn.save_weights(weights_filename, overwrite=True)
-
-    except KeyboardInterrupt:
-        exit(0)
-        pass
-
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
-        pass
-
-
-# uniform everything but distributed rl
-def fully_conf_q_agent_10(a_dir):
-    try:
-        seed = random.randint(1, 324234)
-        env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
-        env.seed(seed)
-        numpy.random.seed(seed)
-
-        nb_actions = 3
-
-        # agent_name = "fake_rainbow_baseline_v10"
-        # run_name = "01"
-
-        dueling = True
-        double = True
-        prio_replay = True
-        noisy_nets = True
-        multi_step_size = 3
-
-        action_repetition = 1
-        gamma = .99
-        memory_size = 200000
-        learning_rate = .0001
-        warm_up_steps = 4000
-        train_interval = 4
-
-        prio_replay_alpha = 0.6
-        prio_replay_beta = (0.5, 1.0, 200000)
-
-        # policy params epsilon greedy
-        if not noisy_nets:
-            eps_start = 1.
-            eps_end = .01
-            eps_steps = 100000
-        else:
-            eps_start = 1.
-            eps_end = 0
-            eps_steps = 4000
-
-        # logging
-
-        directory = a_dir
-        # directory = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_name)
-
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        weights_filename = directory + '/dqn_weights.h5f'
-        checkpoint_weights_filename = directory + '/dqn_weights_{step}.h5f'
-        log_filename = directory + '/dqn_log.json'
-        log_filename_gpu = directory + '/dqn_log_gpu.json'
-        log_interval = 8000
-
-        agent_hyper_params = {
-            "SEED": seed,
-            "NB_ACTIONS": nb_actions,
-
-            "DUELING": dueling,
-            "DOUBLE": double,
-            "PRIO_REPLAY": prio_replay,
-            "NOISY_NETS": noisy_nets,
-            "MULTI_STEP_SIZE": multi_step_size,
-
-            "ACTION_REPETITION": action_repetition,
-            "GAMMA": gamma,
-            "MEMORY_SIZE": memory_size,
-            "LEARNING_RATE": learning_rate,
-            "WARM_UP_STEPS": warm_up_steps,
-            "TRAIN_INTERVAL": train_interval,
-
-            "LOG_INTERVAL": log_interval,
-        }
-
-        agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
-        agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
-
-        agent_hyper_params["EPS_START"] = eps_start
-        agent_hyper_params["EPS_END"] = eps_end
-        agent_hyper_params["EPS_STEPS"] = eps_steps
-
-        # build network
-
-        main_input = Input(shape=(2, env.screen, env.screen), name='main_input')
-        permuted_input = Permute((2, 3, 1))(main_input)
-        x = Conv2D(16, (5, 5), padding='same', activation='relu')(permuted_input)
-        branch = Conv2D(32, (3, 3), padding='same', activation='relu')(x)
-
-        if noisy_nets:
-            coord_out = NoisyConv2D(1, (1, 1), padding='same', activation='linear',
-                                    kernel_initializer='lecun_uniform',
-                                    bias_initializer='lecun_uniform')(branch)
-        else:
-            coord_out = Conv2D(1, (1, 1), padding='same', activation='linear')(branch)
-
-        act_out = Flatten()(branch)
-
-        if noisy_nets:
-            act_out = NoisyDense(256, activation='relu', kernel_initializer='lecun_uniform',
-                                 bias_initializer='lecun_uniform')(act_out)
-            act_out = NoisyDense(nb_actions, activation='linear', kernel_initializer='lecun_uniform',
-                                 bias_initializer='lecun_uniform')(act_out)
-        else:
-            act_out = Dense(256, activation='relu')(act_out)
-            act_out = Dense(nb_actions, activation='linear')(act_out)
-
-        full_conv_sc2 = Model(main_input, [act_out, coord_out])
-
-        save_hyper_parameters(full_conv_sc2, env, directory, agent_hyper_params)
-
-        print(act_out.shape)
-        print(coord_out.shape)
-
-        if prio_replay:
-            memory = PrioritizedReplayBuffer(memory_size, prio_replay_alpha)
-        else:
-            memory = ReplayBuffer(memory_size)
-
-        policy = LinearAnnealedPolicy(Sc2Policy(env=env), attr='eps', value_max=eps_start, value_min=eps_end,
-                                      value_test=eps_end, nb_steps=eps_steps)
-        test_policy = Sc2Policy(env=env, eps=eps_end)
-
-        processor = Sc2Processor(screen=env._SCREEN)
-
-        dqn = Sc2DqnAgent_v4(model=full_conv_sc2, nb_actions=nb_actions, screen_size=env._SCREEN,
-                             enable_dueling_network=dueling, memory=memory, processor=processor,
-                             nb_steps_warmup=warm_up_steps,
-                             enable_double_dqn=double,
-                             prio_replay=prio_replay,
-                             prio_replay_beta=prio_replay_beta,
-                             multi_step_size=multi_step_size,
-                             policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
-                             train_interval=train_interval, delta_clip=1., custom_model_objects={
-                                'NoisyDense': NoisyDense,
-                                'NoisyConv2D': NoisyConv2D})
-
-        dqn.compile(Adam(lr=learning_rate), metrics=['mae'])
-
-        if _TEST:
-            dqn.load_weights(
-                '/home/benjamin/PycharmProjects/dqn/weights/'
-                'CollectMineralShards/fullyConv_v7/08/dqn_weights_6800000.h5f')
-            dqn.test(env, nb_episodes=20, visualize=True)
-        else:
-
-            callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
-            callbacks += [FileLogger(log_filename, interval=100)]
-            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
-            dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
                     action_repetition=action_repetition)
 
             dqn.save_weights(weights_filename, overwrite=True)
@@ -631,6 +673,7 @@ def fully_conf_q_agent_8():
         pass
 
 
+# Experimente mit einem vereinfachten neuralen Netz.
 def conv_no_net_agent():
     try:
         seed = 343453
