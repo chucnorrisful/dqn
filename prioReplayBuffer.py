@@ -1,10 +1,14 @@
 import numpy as np
 import random
-
 from baselines.common.segment_tree import SumSegmentTree, MinSegmentTree
 
 
-# from baselines replay buffer modified to not screw up my actions
+# Eine modifizierte Version des OpenAI baselines/ReplayBuffer. Einzige Änderung ist das Entfernen eines Typecasts
+# der Aktionen in _encode_sample() auf ein numpy Array; da die von mir verwendeten Aktionen Objekte sind,
+# verursachte dies Probleme. Ansonsten ist der Code unverändert, die Klasse PrioritizedReplayBuffer, welche hier auch
+# kopiert ist, erbt von der neuen Version des ReplayBuffer als einzige Änderung.
+
+
 class ReplayBuffer(object):
     def __init__(self, size):
         """Create Replay buffer.

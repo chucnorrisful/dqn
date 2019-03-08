@@ -1,8 +1,12 @@
 from keras import backend as K
-from keras.layers import Dense, conv_utils, activations, regularizers, constraints
-from keras.layers.convolutional import _Conv, Conv2D
+from keras.layers import Dense
+from keras.layers.convolutional import Conv2D
 from keras.engine.base_layer import InputSpec
 from keras import initializers
+
+
+# Eigene Implementierung einer NoisyDense Layer sowie einer NoisyConv2D Layer, welche modifizierte Versionen der
+# entsprechenden Keras-Layers sind, deren Implementierung als Grundlage benutzt wurde.
 
 
 class NoisyDense(Dense):
@@ -20,6 +24,7 @@ class NoisyDense(Dense):
                                       regularizer=None,
                                       constraint=None)
 
+        # Zweiter Kernel (trainable weights) für Steuerung des Zufalls.
         self.kernel_sigma = self.add_weight(shape=(self.input_dim, self.units),
                                       initializer=initializers.Constant(0.017),
                                       name='sigma_kernel',
@@ -33,6 +38,7 @@ class NoisyDense(Dense):
                                         regularizer=None,
                                         constraint=None)
 
+            # trainable, Steuerung des Zufalls des Bias.
             self.bias_sigma = self.add_weight(shape=(self.units,),
                                         initializer=initializers.Constant(0.017),
                                         name='bias_sigma',
@@ -45,13 +51,15 @@ class NoisyDense(Dense):
         self.built = True
 
     def call(self, inputs):
-        print(inputs.get_shape().as_list() + [self.units])
+        # Erzeugen der Matrix mit Zufallszahlen (bei jedem Aufruf neu erzeugt) - Vektor-Version
+        # (siehe Noisy Nets Paper) wäre effizienter.
         self.kernel_epsilon = K.random_normal(shape=(self.input_dim, self.units))
 
         w = self.kernel + K.tf.multiply(self.kernel_sigma, self.kernel_epsilon)
         output = K.dot(inputs, w)
 
         if self.use_bias:
+            # Erzeugung Zufallsvektor für Bias-Zufall.
             self.bias_epsilon = K.random_normal(shape=(self.units,))
 
             b = self.bias + K.tf.multiply(self.bias_sigma, self.bias_epsilon)
@@ -62,7 +70,7 @@ class NoisyDense(Dense):
 
 
 class NoisyConv2D(Conv2D):
-
+    # Prinzip Identisch zur Dense-Layer, lediglich hat der (Filter-) Kernel sowie der Output eine Dimension mehr.
     def build(self, input_shape):
         if self.data_format == 'channels_first':
             channel_axis = 1
@@ -100,14 +108,13 @@ class NoisyConv2D(Conv2D):
                                         constraint=self.bias_constraint)
         else:
             self.bias = None
-        # Set input spec.
+
         self.input_spec = InputSpec(ndim=self.rank + 2,
                                     axes={channel_axis: self.input_dim})
         self.built = True
 
     def call(self, inputs):
         # add noise to kernel
-
         self.kernel_epsilon = K.random_normal(shape=self.kernel_shape)
 
         w = self.kernel + K.tf.multiply(self.kernel_sigma, self.kernel_epsilon)

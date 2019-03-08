@@ -43,8 +43,8 @@ _TEST = False
 
 # Verzeichnis und Agent wählen. Entry-Point des Programms.
 def __main__(unused_argv):
-    agent_name = "testRun_v10"
-    run_number = 1
+    agent_name = "fake_rainbow_v10"
+    run_number = 5
     results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
 
     # choose Agent:
@@ -89,7 +89,7 @@ def fully_conf_v_10(a_dir):
         dueling = True
         double = True
         prio_replay = True
-        noisy_nets = False
+        noisy_nets = True
         multi_step_size = 3
 
         # weitere HyperParameter
@@ -101,6 +101,7 @@ def fully_conf_v_10(a_dir):
         train_interval = 4
 
         # Einstellungen für das Prioritized Experience Replay
+        bad_prio_replay = True   # benutze fachlich falsche, aber bessere Implementierung.
         prio_replay_alpha = 0.6
         prio_replay_beta = (0.5, 1.0, 200000)
 
@@ -148,6 +149,7 @@ def fully_conf_v_10(a_dir):
 
         agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
         agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
+        agent_hyper_params["BAD_PRIO_REPLAY"] = bad_prio_replay
 
         agent_hyper_params["EPS_START"] = eps_start
         agent_hyper_params["EPS_END"] = eps_end
@@ -208,6 +210,7 @@ def fully_conf_v_10(a_dir):
                              enable_double_dqn=double,
                              prio_replay=prio_replay,
                              prio_replay_beta=prio_replay_beta,
+                             bad_prio_replay=bad_prio_replay,
                              multi_step_size=multi_step_size,
                              policy=policy, test_policy=test_policy, gamma=gamma, target_model_update=10000,
                              train_interval=train_interval, delta_clip=1., custom_model_objects={
@@ -221,7 +224,7 @@ def fully_conf_v_10(a_dir):
             for i in range(1, 2):
                 # Hier die entsprechenden Gewichte laden, um einen Testlauf durchzuführen.
                 # Die Schleife kann benutzt werden, um eine Serie von Testläufen zusammen auszuführen.
-                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fake_rainbow_v10/3/dqn_weights_3000000.h5f')
+                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fake_rainbow_v10/4/dqn_weights_3000000.h5f')
 
                 # Anzahl der Testläufe festlegen
                 history = dqn.test(env, nb_episodes=100, visualize=_VISUALIZE)

@@ -329,7 +329,7 @@ def avg_std_plot(paths_a, paths_b, smoother, normalize=None, one=False):
 #     "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"
 # MTB /home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fullyConv_v7/06/dqn_log.json
 
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/real_prio_v2/1/dqn_log.json"],
+multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fake_rainbow_v10/5/dqn_log.json"],
            zero_scale=20, smoother=100, hw_stats=False, compare=["/home/benjamin/PycharmProjects/dqn/weights/Collect"
                                                                  "MineralShards/fake_rainbow_v10/1/dqn_log.json"])
 

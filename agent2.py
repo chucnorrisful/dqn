@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 import warnings
 from copy import deepcopy
-
 import numpy as np
-from keras.callbacks import History
 
+from keras.callbacks import History
 from rl.callbacks import (
     CallbackList,
     TestLogger,
@@ -14,8 +12,22 @@ from rl.callbacks import (
 )
 
 
+# Dies ist eine modifizierte Version der Keras-rl Agent Klasse, welche insbesondere in Form der fit()-Funktion die
+# Hauptschleife des Lernalgorithmus implementiert. Modifiziert wurden nur Details, die Struktur des Algorithmus ist
+# unverändert. Interessant ist dabei nur Agent3; Agent2 wird nur als Grundklasse für ältere Versionen benutzt, und
+# ist nur aus historischen Gründen noch nicht gelöscht worden.
+
 class Agent3(object):
-    """Abstract base class for all implemented agents.
+    """Modifizierte Version des Keras-rl core/Agent
+
+    Änderungen:
+    - backward() hat als zusätzliches Argument observation_1;
+    - Außerdem Änderung des Ende-der-Episode Codes in fit(), welcher nun den RingBuffer der State-Action-Paare leert.
+
+    Anmerkung: Da der Code von Keras-rl stammt, habe ich ihn nicht weiter mit Kommentaren versehen abseits
+    meiner Änderungen.
+
+    Abstract base class for all implemented agents.
 
     Each agent interacts with the environment (as defined by the `Env` class) by first observing the
     state of the environment. Based on this observation the agent changes the environment by performing
@@ -54,6 +66,7 @@ class Agent3(object):
             visualize=False, nb_max_start_steps=0, start_step_policy=None, log_interval=10000,
             nb_max_episode_steps=None):
         """Trains the agent on the given environment.
+        Modifiziert, siehe Text am Klassenanfang.
 
         # Arguments
             env: (`Env` instance): Environment that the agent interacts with. See [Env](#env) for details.
@@ -191,6 +204,7 @@ class Agent3(object):
                 if nb_max_episode_steps and episode_step >= nb_max_episode_steps - 1:
                     # Force a terminal state.
                     done = True
+                # backward hat nun das zusätzliche Argument observation_1
                 metrics = self.backward(reward, terminal=done, observation_1=observation)
                 episode_reward += reward
 
@@ -227,6 +241,7 @@ class Agent3(object):
 
                     episode += 1
                     observation = None
+                    # RingBuffer leeren!
                     for _ in range(self.recent.maxlen):
                         self.recent.append(None)
                     episode_step = None
@@ -241,6 +256,7 @@ class Agent3(object):
 
         return history
 
+    # Änderungen, um die modifizierte Version von backward() zu ermöglichen, ansonsten unverändert.
     def test(self, env, nb_episodes=1, action_repetition=1, callbacks=None, visualize=True,
              nb_max_episode_steps=None, nb_max_start_steps=0, start_step_policy=None, verbose=1):
         """Callback that is called before training begins.
@@ -417,6 +433,7 @@ class Agent3(object):
         """
         raise NotImplementedError()
 
+    # zusätzliches Argument observation_1 hinzugefügt!
     def backward(self, reward, terminal, observation_1):
         """Updates the agent after having executed the action returned by `forward`.
         If the policy is implemented by a neural network, this corresponds to a weight update using back-prop.
@@ -500,7 +517,10 @@ class Agent3(object):
 
 
 class Agent2(object):
-    """Abstract base class for all implemented agents.
+    """Modifizierte Version des Keras-rl core/Agent
+    Änderung: backward() hat nun das zusätzliche Argument observation_1.
+
+    Abstract base class for all implemented agents.
 
     Each agent interacts with the environment (as defined by the `Env` class) by first observing the
     state of the environment. Based on this observation the agent changes the environment by performing

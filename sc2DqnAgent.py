@@ -297,7 +297,7 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
 
     def __init__(self, model, policy=None, test_policy=None, enable_double_dqn=False, enable_dueling_network=False,
                  dueling_type='avg', noisy_nets=True, prio_replay=True, prio_replay_beta=(0.5, 1.0, 200000),
-                 multi_step_size=3, *args, **kwargs):
+                 bad_prio_replay=True, multi_step_size=3, *args, **kwargs):
         super(Sc2DqnAgent_v4, self).__init__(*args, **kwargs)
 
         # Validate (important) input. Falls man sein Model falsch definiert hat (  ^:
@@ -313,6 +313,7 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
         self.noisy_nets = noisy_nets
         self.prio_replay = prio_replay
         self.prio_replay_beta = prio_replay_beta
+        self.bad_prio_replay = bad_prio_replay
         self.multi_step_size = multi_step_size
 
         # Wenn Dueling Networks eingeschaltet ist, werden hier die letzten Ebenen des Netzwerks ersetzt
@@ -649,8 +650,13 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
                     enumerate(zip(targets_a, targets_b, masks_a, masks_b, Rs_a, Rs_b, action_batch, prio_weights_batch)):
                 target_a[action.action] = R_a  # update action with estimated accumulated reward
                 target_b[action.coords] = R_b  # update action with estimated accumulated reward
-                mask_a[action.action] = prio_weight  # enable loss for this specific action
-                mask_b[action.coords] = prio_weight  # enable loss for this specific action
+                if self.bad_prio_replay:
+                    mask_a[action.action] = 1  # enable loss for this specific action
+                    mask_b[action.coords] = 1  # enable loss for this specific action
+                else:
+                    mask_a[action.action] = prio_weight  # enable loss for this specific action
+                    mask_b[action.coords] = prio_weight  # enable loss for this specific action
+
             targets_a = np.array(targets_a).astype('float32')
             targets_b = np.array(targets_b).astype('float32')
             masks_a = np.array(masks_a).astype('float32')
@@ -674,31 +680,31 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             # update priority batch
             if self.prio_replay:
                 prios = []
-                # "Schlechte" Version, die nicht funktionieren dürfte, es aber besser tut als die
-                # richtige Implementierung.
-
-                # for pre in zip(pred[1], pred[2]):
-                #     loss = [target_a - pre[0],
-                #             target_b - pre[1]]
-                #     loss[0] *= mask_a  # apply element-wise mask
-                #     loss[1] *= mask_b  # apply element-wise mask
-                #     sum_loss_a = np.sum(loss[0])
-                #     sum_loss_b = np.sum(loss[1])
-                #     prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
-
-                # Richtige Implementierung.
-                for (pre_a, pre_b, target_a, target_b, mask_a, mask_b, prio_weight) \
-                        in zip(pred[1], pred[2], targets_a, targets_b, masks_a, masks_b, prio_weights_batch):
-                    # need to remove prio weight from masks
-                    mask_a = mask_a / prio_weight
-                    mask_b = mask_b / prio_weight
-                    loss = [pre_a - target_a,
-                            pre_b - target_b]
-                    loss[0] *= mask_a  # apply element-wise mask
-                    loss[1] *= mask_b  # apply element-wise mask
-                    sum_loss_a = np.sum(loss[0])
-                    sum_loss_b = np.sum(loss[1])
-                    prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
+                if self.bad_prio_replay:
+                    # "Schlechte" Version, die nicht funktionieren dürfte, es aber besser tut als die
+                    # richtige Implementierung.
+                    for pre in zip(pred[1], pred[2]):
+                        loss = [target_a - pre[0],
+                                target_b - pre[1]]
+                        loss[0] *= mask_a  # apply element-wise mask
+                        loss[1] *= mask_b  # apply element-wise mask
+                        sum_loss_a = np.sum(loss[0])
+                        sum_loss_b = np.sum(loss[1])
+                        prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
+                else:
+                    # Richtige Implementierung.
+                    for (pre_a, pre_b, target_a, target_b, mask_a, mask_b, prio_weight) \
+                            in zip(pred[1], pred[2], targets_a, targets_b, masks_a, masks_b, prio_weights_batch):
+                        # need to remove prio weight from masks
+                        mask_a = mask_a / prio_weight
+                        mask_b = mask_b / prio_weight
+                        loss = [pre_a - target_a,
+                                pre_b - target_b]
+                        loss[0] *= mask_a  # apply element-wise mask
+                        loss[1] *= mask_b  # apply element-wise mask
+                        sum_loss_a = np.sum(loss[0])
+                        sum_loss_b = np.sum(loss[1])
+                        prios.append(np.abs(np.sum([sum_loss_a, sum_loss_b])))
 
                 self.memory.update_priorities(id_batch, prios)
 
