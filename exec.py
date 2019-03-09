@@ -30,7 +30,7 @@ from rl.memory import SequentialMemory
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
 # Hier Map auswählen und Map/MiniMap Auflösung wählen.
-_ENV_NAME = "CollectMineralShards"
+_ENV_NAME = "MoveToBeacon"
 _SCREEN = 32
 _MINIMAP = 16
 
@@ -43,19 +43,21 @@ _TEST = False
 
 # Verzeichnis und Agent wählen. Entry-Point des Programms.
 def __main__(unused_argv):
-    agent_name = "fake_rainbow_v10"
-    run_number = 5
-    results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
+    extensive_testing()
 
-    # choose Agent:
-    fully_conf_v_10(results_dir)
+    # agent_name = "without_multi_step_v10"
+    # run_number = 1
+    # results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
+    #
+    # # choose Agent:
+    # fully_conf_v_10(results_dir)
 
 
 # Für ununterbrochenes Testen über mehrere Tage/Testläufe hinweg.
 def extensive_testing():
-    name = "fake_rainbow_v10"
+    name = "without_multi_step_v10"
 
-    for i in range(3, 4):
+    for i in range(1, 3):
         results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
         fully_conf_v_10(results_dir)
         K.clear_session()
@@ -86,11 +88,11 @@ def fully_conf_v_10(a_dir):
         # Setzen der HYPERPARAMETER!
         # Ein- und Ausschalten der Rainbow-DQN Erweiterungen.
         # multi_step_size = 1 entspricht ausgeschaltetem Multi-Step DQN.
-        dueling = True
         double = True
+        dueling = True
         prio_replay = True
         noisy_nets = True
-        multi_step_size = 3
+        multi_step_size = 1
 
         # weitere HyperParameter
         action_repetition = 1
@@ -224,7 +226,7 @@ def fully_conf_v_10(a_dir):
             for i in range(1, 2):
                 # Hier die entsprechenden Gewichte laden, um einen Testlauf durchzuführen.
                 # Die Schleife kann benutzt werden, um eine Serie von Testläufen zusammen auszuführen.
-                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fake_rainbow_v10/4/dqn_weights_3000000.h5f')
+                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/4/dqn_weights_2950000.h5f')
 
                 # Anzahl der Testläufe festlegen
                 history = dqn.test(env, nb_episodes=100, visualize=_VISUALIZE)
@@ -238,7 +240,7 @@ def fully_conf_v_10(a_dir):
 
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
-            callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
+            # callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
 
             # Festlegen der Anzahl an Schritten bis zum Ende des Lernprozesses.
             # Startet den Lernprozess!

@@ -586,6 +586,8 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             reward_batch = np.array(reward_batch)
             if self.prio_replay:
                 prio_weights_batch = np.array(prio_weights_batch)
+            else:
+                prio_weights_batch = np.ones(reward_batch.shape)
             assert reward_batch.shape == (self.batch_size,)
             assert terminal2_batch.shape == reward_batch.shape
             assert len(action_batch) == len(reward_batch)
