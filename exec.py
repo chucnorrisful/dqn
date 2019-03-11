@@ -38,24 +38,24 @@ _MINIMAP = 16
 # _TEST = True evaluiert den Agent mit im "if _TEST:" bereich definierten Gewichten -> dort diese ggf. ändern!
 # _TEST = False trainiert den Agent mit im Agent gesetzten Hyperparametern.
 _VISUALIZE = False
-_TEST = False
+_TEST = True
 
 
 # Verzeichnis und Agent wählen. Entry-Point des Programms.
 def __main__(unused_argv):
-    extensive_testing()
+    # extensive_testing()
 
-    # agent_name = "without_multi_step_v10"
-    # run_number = 1
-    # results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
-    #
-    # # choose Agent:
-    # fully_conf_v_10(results_dir)
+    agent_name = "offline_testing"
+    run_number = 1
+    results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
+
+    # choose Agent:
+    fully_conf_v_10(results_dir)
 
 
 # Für ununterbrochenes Testen über mehrere Tage/Testläufe hinweg.
 def extensive_testing():
-    name = "without_multi_step_v10"
+    name = "without_noisy_v10"
 
     for i in range(1, 3):
         results_dir = "weights/{}/{}/{}".format(_ENV_NAME, name, i)
@@ -88,9 +88,9 @@ def fully_conf_v_10(a_dir):
         # Setzen der HYPERPARAMETER!
         # Ein- und Ausschalten der Rainbow-DQN Erweiterungen.
         # multi_step_size = 1 entspricht ausgeschaltetem Multi-Step DQN.
-        double = True
-        dueling = True
-        prio_replay = True
+        double = False
+        dueling = False
+        prio_replay = False
         noisy_nets = True
         multi_step_size = 1
 
@@ -226,7 +226,7 @@ def fully_conf_v_10(a_dir):
             for i in range(1, 2):
                 # Hier die entsprechenden Gewichte laden, um einen Testlauf durchzuführen.
                 # Die Schleife kann benutzt werden, um eine Serie von Testläufen zusammen auszuführen.
-                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/4/dqn_weights_2950000.h5f')
+                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_noisy_v10/0' + i.__str__() + '/dqn_weights_3000000.h5f')
 
                 # Anzahl der Testläufe festlegen
                 history = dqn.test(env, nb_episodes=100, visualize=_VISUALIZE)
