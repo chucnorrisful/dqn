@@ -7,13 +7,13 @@ from absl import app
 
 # own classes
 from env import Sc2Env1Output, Sc2Env2Outputs
-from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3, Sc2DqnAgent_v4, Sc2DqnAgent_v5
 from sc2Processor import Sc2Processor
 from sc2Policy import Sc2Policy, Sc2PolicyD
+from sc2DqnAgent import SC2DQNAgent, Sc2DqnAgent_v2, Sc2DqnAgent_v3, Sc2DqnAgent_v4, Sc2DqnAgent_v5
 from noisyNetLayers import NoisyDense, NoisyConv2D
+from prioReplayBuffer import PrioritizedReplayBuffer, ReplayBuffer
 from customCallbacks import GpuLogger
 from plot import test_plot
-from prioReplayBuffer import PrioritizedReplayBuffer, ReplayBuffer
 
 # framework classes
 from pysc2.env import sc2_env
@@ -29,24 +29,29 @@ from rl.policy import LinearAnnealedPolicy, EpsGreedyQPolicy
 from rl.memory import SequentialMemory
 from rl.callbacks import FileLogger, ModelIntervalCheckpoint
 
-# Hier Map auswählen und Map/MiniMap Auflösung wählen.
+# Hier Map auswählen und Screen/MiniMap-Auflösung setzen.
+# MiniGame 1: MoveToBeacon
+# MiniGame 2: CollectMineralShards
 _ENV_NAME = "MoveToBeacon"
 _SCREEN = 32
 _MINIMAP = 16
 
-# Auf Windows muss _VISUALIZE immer False sein.
-# _TEST = True evaluiert den Agent mit im "if _TEST:" bereich definierten Gewichten -> dort diese ggf. ändern!
-# _TEST = False trainiert den Agent mit im Agent gesetzten Hyperparametern.
+# _VISUALIZE schaltet den Feature-Screen-Viewer ein- und aus.
+# Auf Windows sollte _VISUALIZE immer False sein.
+# _TEST = True      evaluiert den Agent mit im "if _TEST:" bereich definierten Gewichten -> dort diese ggf. ändern!
+# _TEST = False     trainiert den Agent mit im Agent gesetzten Hyperparametern. Recommended.
 _VISUALIZE = False
-_TEST = True
+_TEST = False
 
 
-# Verzeichnis und Agent wählen. Entry-Point des Programms.
+# Entry-Point des Programms.
+# Name für Agent wählen.
+# Die Funktion fully_conf_v_10() repräsentiert den gleichnamigen Agent. Zum testen anderer diese austauschen.
+# Es wird automatisch ein Ordner im Projektordner erstellt.
 def __main__(unused_argv):
-    # extensive_testing()
-
-    agent_name = "offline_testing"
+    agent_name = "my_first_run"
     run_number = 1
+
     results_dir = "weights/{}/{}/{}".format(_ENV_NAME, agent_name, run_number)
 
     # choose Agent:
@@ -67,32 +72,34 @@ def extensive_testing():
 # verbessert wurden. Um Variationen der Algorithmen zu testen, genügt allerdings der FullyConv_V10 Agent alleine,
 # da sich alle Rainbow-Erweiterungen ein- und ausschalten lassen. Ältere Agents sind kaum dokumentiert, da sie nur
 # aus historischen Gründen noch nicht gelöscht wurden.
+# Für Darstellungsmöglichkeiten des Lernfortschritts, siehe plot.py.
 
 
 # FullyConv_V10, zusammen mit Sc2DqnAgent_v4 als Agent => FINAL AGENT SO FAR
-# Alles außer Distributional RL [dafür experimentellen V11 Agent, lernt aktuell nicht].
+# Alle Rainbow Erweiterungen außer Distributional RL [dafür experimentellen V11 Agent, dieser lernt aktuell nicht].
 def fully_conf_v_10(a_dir):
     try:
-        # Setzen eines zufälligen Seeds, welcher gespeichert wird.
-        # Initialisieren der Adapterklasse Sc2Env2Outputs, welche StarCraft2 intern verwaltet
+        # Setzen eines zufälligen Seeds, welcher später gespeichert wird.
+        # Initialisieren der Adapterklasse Sc2Env2Outputs, welche StarCraft II intern verwaltet
         # und Observations/Actions aufbereitet.
         seed = random.randint(1, 324234)
         env = Sc2Env2Outputs(screen=_SCREEN, visualize=_VISUALIZE, env_name=_ENV_NAME, training=not _TEST)
         env.seed(seed)
         numpy.random.seed(seed)
 
-        # Definieren der Anzahl der verschiedenen Optionen (hier NO_OP, MOVE_SCREEN und SELECT_POINT(toggle).
+        # Definieren der Anzahl der verschiedenen Aktionen des Agents (hier NO_OP, MOVE_SCREEN und SELECT_POINT(toggle).
         # Diese müssen in env.action_to_sc2() definiert sein!
         nb_actions = 3
 
         # Setzen der HYPERPARAMETER!
+
         # Ein- und Ausschalten der Rainbow-DQN Erweiterungen.
         # multi_step_size = 1 entspricht ausgeschaltetem Multi-Step DQN.
-        double = False
-        dueling = False
-        prio_replay = False
+        double = True
+        dueling = True
+        prio_replay = True
         noisy_nets = True
-        multi_step_size = 1
+        multi_step_size = 3
 
         # weitere HyperParameter
         action_repetition = 1
@@ -103,9 +110,11 @@ def fully_conf_v_10(a_dir):
         train_interval = 4
 
         # Einstellungen für das Prioritized Experience Replay
-        bad_prio_replay = True   # benutze fachlich falsche, aber bessere Implementierung.
+        # bad_prio_replay = True  schaltet Benutzen der fachlich falschen, aber besser/gleichwertig
+        # performenden Implementierung ein.
+        bad_prio_replay = True
         prio_replay_alpha = 0.6
-        prio_replay_beta = (0.5, 1.0, 200000)
+        prio_replay_beta = (0.5, 1.0, 200000)   # (beta_start, beta_end, number_of_steps_to_go_from_start_to_end)
 
         # Parameter für die Epsilon-Greedy Policy
         if not noisy_nets:
@@ -117,6 +126,7 @@ def fully_conf_v_10(a_dir):
             eps_end = 0
             eps_steps = 4000
 
+        # ENDE der Hyperparameter - ab hier sollte der Code nur auf eigene Gefahr verändert werden.
         # Logging aller HyperParameter, sowie Festlegen des Pfads für wärend des Lernprozesses generierte Logs etc.
         directory = a_dir
 
@@ -129,33 +139,14 @@ def fully_conf_v_10(a_dir):
         log_filename_gpu = directory + '/dqn_log_gpu.json'
         log_interval = 8000
 
-        agent_hyper_params = {
-            "SEED": seed,
-            "NB_ACTIONS": nb_actions,
-
-            "DUELING": dueling,
-            "DOUBLE": double,
-            "PRIO_REPLAY": prio_replay,
-            "NOISY_NETS": noisy_nets,
-            "MULTI_STEP_SIZE": multi_step_size,
-
-            "ACTION_REPETITION": action_repetition,
-            "GAMMA": gamma,
-            "MEMORY_SIZE": memory_size,
-            "LEARNING_RATE": learning_rate,
-            "WARM_UP_STEPS": warm_up_steps,
-            "TRAIN_INTERVAL": train_interval,
-
-            "LOG_INTERVAL": log_interval,
-        }
-
-        agent_hyper_params["PRIO_REPLAY_ALPHA"] = prio_replay_alpha
-        agent_hyper_params["PRIO_REPLAY_BETA"] = prio_replay_beta
-        agent_hyper_params["BAD_PRIO_REPLAY"] = bad_prio_replay
-
-        agent_hyper_params["EPS_START"] = eps_start
-        agent_hyper_params["EPS_END"] = eps_end
-        agent_hyper_params["EPS_STEPS"] = eps_steps
+        agent_hyper_params = {"SEED": seed, "NB_ACTIONS": nb_actions, "DUELING": dueling, "DOUBLE": double,
+                              "PRIO_REPLAY": prio_replay, "NOISY_NETS": noisy_nets, "MULTI_STEP_SIZE": multi_step_size,
+                              "ACTION_REPETITION": action_repetition, "GAMMA": gamma, "MEMORY_SIZE": memory_size,
+                              "LEARNING_RATE": learning_rate, "WARM_UP_STEPS": warm_up_steps,
+                              "TRAIN_INTERVAL": train_interval, "LOG_INTERVAL": log_interval,
+                              "PRIO_REPLAY_ALPHA": prio_replay_alpha, "PRIO_REPLAY_BETA": prio_replay_beta,
+                              "BAD_PRIO_REPLAY": bad_prio_replay, "EPS_START": eps_start, "EPS_END": eps_end,
+                              "EPS_STEPS": eps_steps}
 
         # Definition des neuralen Netzwerks!
         # Input und Output Dimensionen müssen eingehalten werden!
@@ -226,24 +217,28 @@ def fully_conf_v_10(a_dir):
             for i in range(1, 2):
                 # Hier die entsprechenden Gewichte laden, um einen Testlauf durchzuführen.
                 # Die Schleife kann benutzt werden, um eine Serie von Testläufen zusammen auszuführen.
-                dqn.load_weights('/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_noisy_v10/0' + i.__str__() + '/dqn_weights_3000000.h5f')
+                dqn.load_weights('/pathToProjectFolder/dqn/weights/MoveToBeacon/my_first_run/' + i.__str__() + '/dqn_weights_3000000.h5f')
 
-                # Anzahl der Testläufe festlegen
+                # Anzahl der Testläufe festlegen durch den nb_episodes Parameter.
                 history = dqn.test(env, nb_episodes=100, visualize=_VISUALIZE)
                 h.append(history.history['episode_reward'])
 
             for his in h:
-                # Schreibt Durchschnitt, Maximalwert und Standardabweichung in die Kommandozeile.
+                # Schreibt Standardabweichung, Maximalwert und Durchschnitt in die Kommandozeile.
                 test_plot(his)
 
         else:
 
             callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=50000)]
             callbacks += [FileLogger(log_filename, interval=100)]
+
+            # Die folgende Zeile einkommentieren, falls eine NVidia-GPU verwendet wird, um GPU-Logging einzuschalten.
+            # Das Kommandozeilentool nvidia-smi muss installiert sein.
+            # Auf Windows nicht getestet. Für Debug-Zwecke gedacht.
             # callbacks += [GpuLogger(log_filename_gpu, interval=100, printing=True)]
 
-            # Festlegen der Anzahl an Schritten bis zum Ende des Lernprozesses.
             # Startet den Lernprozess!
+            # Festlegen der Anzahl an Schritten bis zum Ende des Lernprozesses durch nb_steps.
             dqn.fit(env, nb_steps=3000000, nb_max_start_steps=0, callbacks=callbacks, log_interval=log_interval,
                     action_repetition=action_repetition)
 
@@ -259,9 +254,13 @@ def fully_conf_v_10(a_dir):
         pass
 
 
+# Ab hier beginnt die HISTORISCHE ZONE. Der folgende Code ist nur sporadisch kommentiert, da er nur zu
+# Anschauungszwecken sowie zur dokumentation des Programmierfortschritts noch nicht gelöscht wurde, oder im Fall von
+# Distributional RL leider noch nicht funktioniert.
+
 # Distributional RL - lernt noch nicht, läuft aber.
 # Für interne Funktionsweise siehe fully_conf_v_10().
-# Alle Erweiterungen müssen deaktiviert sein, da noch nicht implementiert.
+# Alle Erweiterungen müssen deaktiviert sein, da noch nicht implementiert - nur standard DQN mit distributed=True läuft.
 def fully_conf_q_agent_11():
     try:
         seed = 3453
@@ -1684,6 +1683,8 @@ def simple_scripted_agent():
         pass
 
 
+# Hilfsmethoden.
+
 def save_hyper_parameters(model, env, path, agent_specific=None):
     net = []
     for layer in model.layers:
@@ -1704,6 +1705,8 @@ def save_hyper_parameters(model, env, path, agent_specific=None):
     with open(path + '/hyper.json', 'w') as outfile:
         json.dump(hyper, outfile)
 
+
+# Starten des Programms.
 
 if __name__ == '__main__':
     app.run(__main__)

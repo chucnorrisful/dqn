@@ -23,7 +23,7 @@ class Sc2Action:
         self.action = act
 
 
-# Der Klassenstruktur des Keras-rl Frameworks folgend (siehe rl.agents.dqn.py) kopien der Klasse AbstractDQNAgent,
+# Der Klassenstruktur des Keras-rl Frameworks folgend (siehe rl.agents.dqn.py) Kopien der Klasse AbstractDQNAgent,
 # welche kaum modifiziert sind (in den jeweiligen Kommentaren am Klassenanfang beschrieben).
 
 
@@ -683,7 +683,7 @@ class Sc2DqnAgent_v4(AbstractSc2DQNAgent3):
             if self.prio_replay:
                 prios = []
                 if self.bad_prio_replay:
-                    # "Schlechte" Version, die nicht funktionieren dürfte, es aber besser tut als die
+                    # "Schlechte" Version, die nicht funktionieren dürfte, es aber besser oder gleichgut tut als die
                     # richtige Implementierung.
                     for pre in zip(pred[1], pred[2]):
                         loss = [target_a - pre[0],

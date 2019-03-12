@@ -1,16 +1,27 @@
-import json, csv
+import json
 import os
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 
+# Eine Reihe an Hilfsmethoden für verschiedene Visualisierungen des Lernprozesses.
+# Ganz unten in dieser Datei sind Beispiele.
+# Achtung: Erst nach 100 Episoden sind genug Daten in den Logfiles, um einen ersten Plot anzuzeigen.
+
+
+# Standard Plot des Lernfortschritts eines Agents aus dessen LogFile (auch wärend dieser lernt zu verwenden).
+# paths ist eine list an pfaden(absolut) zu logfiles, welche normalerweise genau ein Element enthält.
+# Mehrere Einträge in paths sind möglich, um den Verlauf eines unterbrochenen Testlaufs zu plotten, von welchem
+# man zwei Logfiles hat.
+# smoother gibt an, über wie viele Einträge jeweils der Durchschnitt gebildet werden soll für die mean_reward Kurve.
+# Schreibt MAX, BEST_MEAN und Standardabweichung in der Umgebung des BEST_MEAN in die Kommandozeile.
+# Wenn GPU-Logging benutzt wurde, können diese mit hw_stats=True geplottet werden.
+# compare erwartet den gleichen Input wie paths, hier kann ein Pfad zu einem zweiten Logfile eingegeben werden,
+# welcher dann zum Vergleich mit geplottet wird.
 def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=False, compare=None) -> None:
     rew = []
     loss = []
-    mae = []
-    mean_q = []
-    mean_eps = []
     nb_steps = []
 
     fan_speed = []
@@ -31,9 +42,6 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
             data = json.load(f)
             loss += data["loss"]
             rew += data["episode_reward"]
-            # mae += data["mean_absolute_error"]
-            # mean_q += data["mean_q"]
-            # mean_eps += data["mean_eps"]
             nb_steps += data["nb_steps"]
 
         if hw_stats:
@@ -58,8 +66,7 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
     smooth = []
     zero_rate = []
     sigmas = []
-    # rew = rew[400:]
-    # loss = loss[400:]
+
     for (i, re) in enumerate(rew):
         start = i - smoother
         if start < 0:
@@ -97,18 +104,10 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
             mean = np.mean(cmp_rew[start:end])
             cmp_smooth.append(mean)
 
-    # find step count by finding steps in nb_steps array
-    step_coll = 0
-    for i in range(1, len(nb_steps) - 1):
-        if nb_steps[i-1] > nb_steps[i]:
-            step_coll += nb_steps[i-1]
-
-    # print(step_coll)
-
-    # plt.plot(np.array(mean_q) * 1, 'g-', label='mean_q')
-    plt.scatter(y=rew, x=np.arange(0, len(rew)*1920, 1920), s=1, color="k", label='reward')
-    plt.plot(np.arange(0, len(rew)*1920, 1920), smooth, '-', color='orange', label='mean_reward')
-    plt.plot(np.arange(0, len(rew)*1920, 1920), sigmas, 'r-', label='sigma')
+    plt.scatter(y=rew, x=np.arange(0, len(rew), 1), s=1, color="k", label='reward')
+    plt.plot(smooth, '-', color='orange', label='mean_reward')
+    plt.plot(sigmas, 'r-', label='sigma')
+    plt.plot(zero_rate, '-', label='zero_rate')
     if compare:
         plt.plot(cmp_smooth, '-', color='blue', label='reward_cmp')
     if hw_stats:
@@ -118,22 +117,23 @@ def multi_plot(paths: list, smoother: int = 100, zero_scale: int = 10, hw_stats=
         plt.plot(ram_util, ',-', label='ram_util')
         plt.plot(swap_util, ',-', label='swap_util')
         plt.plot(cpu_util, ',-', label='cpu_util')
-    plt.axvline(x=12605*1920, label="3mio steps")
     plt.legend()
-    # plt.show()
-    directory = "dqn/plots/CollectMineralShards"
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-    plt.savefig(directory + '/fcV10_4.png', dpi=150)
+    plt.show()
+    # Einkommentieren und Pfad ändern, um Plot direkt in ein Verzeichnis zu schreiben.
+    # directory = "dqn/plots"
+    # if not os.path.exists(directory):
+    #     os.makedirs(directory)
+    # plt.savefig(directory + '/my_plot.png', dpi=150)
 
     max = np.argmax(rew)
     max_mean = np.argmax(smooth)
 
-    print(rew[max])
-    print(smooth[max_mean])
-    print(sigmas[max_mean])
+    print("Max: ", rew[max])
+    print("Best Mean:", smooth[max_mean])
+    print("Standardabweichung: ", sigmas[max_mean], " [In der Umgebung des Best Mean]")
 
 
+# Hilfsmethode für Testlauf in exec.py
 def test_plot(rewards):
 
     sigmas = np.std(rewards)
@@ -144,6 +144,8 @@ def test_plot(rewards):
     print(sigmas, maxi, mean)
 
 
+# paths sind hier verschiedene Testläufe, die in die gleiche Grafik geplottet werden sollen.
+# im Gegensatz zu multi_plot wird außerdem die Standardabweichung mit eingezeichnet.
 def std_plot(paths, smoother, std=True):
     rew = []
     loss = []
@@ -207,6 +209,10 @@ def std_plot(paths, smoother, std=True):
     plt.savefig(directory + '/lol.png', dpi=150)
 
 
+# Aus den Daten verschiedener Testläufe aus paths_a und paths_b wird jeweils ein Durchschnitt berechnet, und diese
+# beiden Durchschnitte beide geplottet. Normalize kann "MoveToBeacon" oder "CollectMineralShards" sein und normalisiert,
+# falls übergeben, zu der menschlichen Baseline eines StarCraft Grandmasters nach dem SC2LE Paper.
+# wenn one=True, kann man paths_b weglassen.
 def avg_std_plot(paths_a, paths_b, smoother, normalize=None, one=False):
     rew_a = []
     rew_b = []
@@ -327,6 +333,7 @@ def avg_std_plot(paths_a, paths_b, smoother, normalize=None, one=False):
     plt.savefig(directory + '/fake_rainbow_baseline_v10_avg.svg')
 
 
+# Benennungs-hilfs-methode
 def get_label(i):
     if i == 0:
         return "DQN"
@@ -344,6 +351,8 @@ def get_label(i):
         return "FullyConv V10"
 
 
+# paths_all ist eine zweidimensionale Liste, welche Listen von Pfaden zu Plots enthält. Aus jeder Sub-Liste wird der
+# Durchschnitt gebildet, und anschließend alle zusammen geplottet.
 def avg_std_plot_2(paths_all, smoother, normalize=None):
     rew_all = []
 
@@ -413,7 +422,7 @@ def avg_std_plot_2(paths_all, smoother, normalize=None):
     plt.figure()
 
     for i, enemy in enumerate(avg):
-        plt.plot(enemy[0], '-', label=get_label(i))  # , color="xkcd:orange"
+        plt.plot(enemy[0], '-', label=i+1)  # , color="xkcd:orange"
         sm_plus = enemy[0] + enemy[1]
         sm_minus = enemy[0] - enemy[1]
         plt.fill_between(np.arange(0, len(enemy[0]), 1),
@@ -422,83 +431,23 @@ def avg_std_plot_2(paths_all, smoother, normalize=None):
                          alpha=0.15)  # , color="xkcd:orange"
     plt.legend()
     # plt.show()
-    directory = "dqn/plots/MoveToBeacon"
+    directory = "dqn/plots/CollectMineralShards"
     if not os.path.exists(directory):
         os.makedirs(directory)
-    plt.savefig(directory + '/only.png', dpi=150)
+    plt.savefig(directory + '/cms_dqn.png', dpi=150)
 
 
-# avg_std_plot_2([["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/1/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/3/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/4/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/5/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/logs_for_plots_simon/without_double_1_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/logs_for_plots_simon/without_double_2_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/logs_for_plots_simon/without_dueling_1_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/logs_for_plots_simon/without_dueling_2_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/logs_for_plots_simon/without_per_1_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/logs_for_plots_simon/without_per_2_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/without_noisy_v10/1/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/without_noisy_v10/2/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/without_multi_step_v10/1/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/without_multi_step_v10/2/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/1/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/2/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/3/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/4/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/5/dqn_log.json"]], smoother=100, normalize="MoveToBeacon")
+# Beispeilhafte Verwendung:
 
-
-multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v10/01/dqn_log.json"],
-           zero_scale=20, smoother=100, hw_stats=False)
-
-# multi_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_multi_step_v10/01/dqn_log.json"],
+# Lernverlauf live plotten.
+# Erst nach den ersten 100 Episoden stehen genug Daten im Logfile, vorher crasht diese Methode!
+# multi_plot(["/PathToDqn/dqn/weights/CollectMineralShards/my_first_run/1/dqn_log.json"],
 #            zero_scale=20, smoother=100, hw_stats=False)
 
-# Catchy Only Plot
-# std_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/5/dqn_log.json",
-#           "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_double_v10/1/dqn_log.json",
-#           "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_dueling_v10/01/dqn_log.json",
-#           "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_prio_v10/01/dqn_log.json",
-#           "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_noisy_v10/01/dqn_log.json",
-#           "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_multi_step_v10/01/dqn_log.json",
-#           "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/2/dqn_log.json"], 200, std=False)
-
-# avg_std_plot_2([["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/1/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/3/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/4/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/dqn_baseline_v10/5/dqn_log.json"],
+# Vergleichen zweier Durchschnitte über jeweils zwei Testläufe.
+# avg_std_plot_2([["/PathToDqn/dqn/weights/MoveToBeacon/my_first_run/1/dqn_log.json",
+#                  "/PathToDqn/dqn/weights/MoveToBeacon/my_first_run/2/dqn_log.json"],
 #
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_double_v10/1/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_dueling_v10/01/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_prio_v10/01/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_noisy_v10/01/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/only_multi_step_v10/01/dqn_log.json"],
-#
-#                 ["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/1/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/2/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/3/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/4/dqn_log.json",
-#                  "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/5/dqn_log.json"]], smoother=100, normalize="MoveToBeacon")
-
-# avg_std_plot(["/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/1/dqn_log.json",
-#               "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/2/dqn_log.json",
-#               "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/3/dqn_log.json",
-#               "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/4/dqn_log.json",
-#               "/home/benjamin/PycharmProjects/dqn/weights/MoveToBeacon/fake_rainbow_baseline_v10/5/dqn_log.json"],
-#
-#              [],
-#              100, one=True)
-
-# compare=["/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log_01.json",
-#         "/home/benjamin/PycharmProjects/dqn/weights/CollectMineralShards/fullyConv_v7/08/dqn_log.json"])
+#                 ["/PathToDqn/dqn/weights/MoveToBeacon/my_second_run/1/dqn_log.json",
+#                  "/PathToDqn/dqn/weights/MoveToBeacon/my_second_run/2/dqn_log.json"]],
+#                  smoother=100, normalize="MoveToBeacon")
