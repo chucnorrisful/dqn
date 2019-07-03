@@ -6,6 +6,8 @@ and modding it to to use the [Rainbow-DQN](https://arxiv.org/abs/1710.02298) alg
 ---
 ### Current state of the project
 
+#### Final Paper (german): [read here](https://github.com/chucnorrisful/dqn/blob/master/RainbowInSC2.pdf)
+
 - [x] Naive DQN with basic keras-rl dqn agent
 - [x] Fully-conv network with 2 outputs (described in [this deepmind paper](https://deepmind.com/documents/110/sc2le.pdf))
 - [x] Double DQN (described [here](https://www.aaai.org/ocs/index.php/AAAI/AAAI16/paper/viewPaper/12389))
